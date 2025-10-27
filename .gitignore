@@ -34,3 +34,10 @@ go.work.sum
 .gocache/
 
 ollama-model-downloader
+
+# Temporary directories
+tmp/
+ollama-staging-*/
+
+# Downloaded model files
+*.zip

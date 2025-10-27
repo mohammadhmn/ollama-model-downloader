@@ -10,24 +10,45 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"html/template"
 	"io"
 	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
+
+
 )
 
 const (
     defaultRegistry = "https://registry.ollama.ai"
 )
+
+var currentZip string
+var currentProgress *progress
+var globalCancel context.CancelFunc
+var currentMessage string
+
+type PageData struct {
+    Message string
+    ZipPath string
+}
+
+type ProgressData struct {
+    Done    int64   `json:"done"`
+    Total   int64   `json:"total"`
+    Percent int     `json:"percent"`
+}
 
 // OCI / Docker media types we care about
 const (
@@ -70,16 +91,17 @@ type bearerAuth struct {
 }
 
 type options struct {
-    model       string
-    registry    string
-    platform    string // linux/amd64 or linux/arm64
-    outZip      string
-    concurrency int
-    verbose     bool
-    keepStaging bool
-    retries     int
-    timeout     time.Duration
-    insecureTLS bool
+model       string
+registry    string
+platform    string // linux/amd64 or linux/arm64
+outZip      string
+concurrency int
+verbose     bool
+keepStaging bool
+retries     int
+timeout     time.Duration
+insecureTLS bool
+port        int
 }
 
 func main() {
@@ -97,35 +119,35 @@ func main() {
     defaultPlatform := fmt.Sprintf("linux/%s", archFromGo(runtime.GOARCH))
     flag.StringVar(&opt.platform, "platform", defaultPlatform, "target platform (linux/amd64 or linux/arm64)")
     flag.StringVar(&opt.outZip, "o", "", "output zip path (default: <model>.zip)")
+    flag.IntVar(&opt.port, "port", 0, "port to listen on (0 for random)")
     flag.Parse()
 
-    if flag.NArg() < 1 {
-        fmt.Fprintln(os.Stderr, "usage: ollama-model-downloader [flags] <model[:tag]|model@sha256:digest>")
-        flag.PrintDefaults()
-        os.Exit(2)
-    }
-    opt.model = flag.Arg(0)
-
-    if opt.outZip == "" {
-        // sanitize model name to be filesystem friendly
-        sanitized := strings.ReplaceAll(opt.model, "/", "-")
-        sanitized = strings.ReplaceAll(sanitized, ":", "-")
-        sanitized = strings.ReplaceAll(sanitized, "@", "-")
-        if !strings.HasSuffix(strings.ToLower(sanitized), ".zip") {
-            sanitized += ".zip"
-        }
-        opt.outZip = sanitized
-    }
-
-    if timeoutSec > 0 {
-        opt.timeout = time.Duration(timeoutSec) * time.Second
+    if flag.NArg() == 0 {
+        startWebServer(opt.port)
     } else {
-        opt.timeout = 0
-    }
+        opt.model = flag.Arg(0)
 
-    if err := run(opt); err != nil {
-        fmt.Fprintln(os.Stderr, "error:", err)
-        os.Exit(1)
+        if opt.outZip == "" {
+            // sanitize model name to be filesystem friendly
+            sanitized := strings.ReplaceAll(opt.model, "/", "-")
+            sanitized = strings.ReplaceAll(sanitized, ":", "-")
+            sanitized = strings.ReplaceAll(sanitized, "@", "-")
+            if !strings.HasSuffix(strings.ToLower(sanitized), ".zip") {
+                sanitized += ".zip"
+            }
+            opt.outZip = sanitized
+        }
+
+        if timeoutSec > 0 {
+            opt.timeout = time.Duration(timeoutSec) * time.Second
+        } else {
+            opt.timeout = 0
+        }
+
+        if err := run(context.Background(), opt); err != nil {
+            fmt.Fprintln(os.Stderr, "error:", err)
+            os.Exit(1)
+        }
     }
 }
 
@@ -201,8 +223,7 @@ func parseModel(registryBase, model string) (modelRef, error) {
     return modelRef{Host: host, Repository: repository, Reference: reference, ReferenceTag: tag, IsDigest: isDigest}, nil
 }
 
-func run(opt options) error {
-    ctx := context.Background()
+func run(ctx context.Context, opt options) error {
     // HTTP client with tuned transport
     client := newHTTPClient(opt)
 
@@ -367,13 +388,20 @@ func run(opt options) error {
             total += it.size
         }
     }
-    p := newProgress(total)
-    if total > 0 {
-        p.Start()
-        defer func() {
-            p.Stop()
-            fmt.Fprintln(os.Stderr) // newline after progress
-        }()
+    var p *progress
+    if currentProgress != nil {
+        p = currentProgress
+        p.total = total
+        // Don't start/stop for web UI, progress shown in browser
+    } else {
+        p = newProgress(total)
+        if total > 0 {
+            p.Start()
+            defer func() {
+                p.Stop()
+                fmt.Fprintln(os.Stderr) // newline after progress
+            }()
+        }
     }
 
     sem := make(chan struct{}, max(1, opt.concurrency))
@@ -866,4 +894,169 @@ func backoff(i int, verbose bool) {
         fmt.Printf("retrying in %v...\n", sleep)
     }
     time.Sleep(sleep)
+}
+
+func startWebServer(port int) {
+    tmpl, err := template.ParseFiles("templates/index.html")
+    if err != nil {
+        fmt.Println("Error parsing template:", err)
+        return
+    }
+
+    http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+        if r.Method != http.MethodGet {
+            http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+            return
+        }
+        data := PageData{Message: currentMessage}
+        if currentZip != "" {
+            if _, err := os.Stat(currentZip); err == nil {
+                data.ZipPath = currentZip
+            }
+        }
+        tmpl.Execute(w, data)
+    })
+
+    http.HandleFunc("/download", func(w http.ResponseWriter, r *http.Request) {
+        if r.Method != http.MethodPost {
+            http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+            return
+        }
+        if err := r.ParseForm(); err != nil {
+            http.Error(w, "Bad request", http.StatusBadRequest)
+            return
+        }
+        model := r.FormValue("model")
+        concurrencyStr := r.FormValue("concurrency")
+        concurrency, _ := strconv.Atoi(concurrencyStr)
+        if concurrency <= 0 {
+            concurrency = 4
+        }
+        retriesStr := r.FormValue("retries")
+        retries, _ := strconv.Atoi(retriesStr)
+        if retries < 0 {
+            retries = 3
+        }
+
+        opt := options{
+            model:       model,
+            registry:    defaultRegistry,
+            platform:    fmt.Sprintf("linux/%s", archFromGo(runtime.GOARCH)),
+            concurrency: concurrency,
+            verbose:     false,
+            keepStaging: false,
+            retries:     retries,
+            timeout:     0,
+            insecureTLS: false,
+        }
+
+        // set outZip
+        sanitized := strings.ReplaceAll(opt.model, "/", "-")
+        sanitized = strings.ReplaceAll(sanitized, ":", "-")
+        sanitized = strings.ReplaceAll(sanitized, "@", "-")
+        if !strings.HasSuffix(strings.ToLower(sanitized), ".zip") {
+            sanitized += ".zip"
+        }
+        opt.outZip = sanitized
+        currentZip = opt.outZip
+        currentProgress = newProgress(0) // total will be set later in run
+        currentMessage = "Downloading..."
+
+        ctx, cancel := context.WithCancel(context.Background())
+        globalCancel = cancel
+
+        go func() {
+            err := run(ctx, opt)
+            globalCancel = nil
+            currentProgress = nil
+            if err != nil {
+                if err == context.Canceled {
+                    currentMessage = "Download cancelled."
+                } else {
+                    currentMessage = fmt.Sprintf("Download failed: %s", err.Error())
+                }
+            } else {
+                currentMessage = "Download completed."
+            }
+        }()
+
+        http.Redirect(w, r, "/", http.StatusFound)
+    })
+
+    http.HandleFunc("/download/", func(w http.ResponseWriter, r *http.Request) {
+        if r.Method != http.MethodGet {
+            http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+            return
+        }
+        filename := strings.TrimPrefix(r.URL.Path, "/download/")
+        if filename == "" {
+            http.Error(w, "Not found", http.StatusNotFound)
+            return
+        }
+        if _, err := os.Stat(filename); os.IsNotExist(err) {
+            http.Error(w, "File not found", http.StatusNotFound)
+            return
+        }
+        http.ServeFile(w, r, filename)
+    })
+
+    http.HandleFunc("/progress", func(w http.ResponseWriter, r *http.Request) {
+        if r.Method != http.MethodGet {
+            http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+            return
+        }
+        w.Header().Set("Content-Type", "application/json")
+        data := ProgressData{}
+        if currentProgress != nil {
+            data.Done = atomic.LoadInt64(&currentProgress.done)
+            data.Total = currentProgress.total
+            if data.Total > 0 {
+                data.Percent = int((data.Done * 100) / data.Total)
+            }
+        }
+        json.NewEncoder(w).Encode(data)
+    })
+
+    http.HandleFunc("/cancel", func(w http.ResponseWriter, r *http.Request) {
+        if r.Method != http.MethodPost {
+            http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+            return
+        }
+        if globalCancel != nil {
+            globalCancel()
+        }
+        http.Redirect(w, r, "/", http.StatusFound)
+    })
+
+    addr := ":0"
+    if port != 0 {
+        addr = fmt.Sprintf(":%d", port)
+    }
+    listener, err := net.Listen("tcp", addr)
+    if err != nil {
+        fmt.Println("Error starting server:", err)
+        return
+    }
+    actualPort := listener.Addr().(*net.TCPAddr).Port
+    fmt.Printf("Starting web server on :%d\n", actualPort)
+    go http.Serve(listener, nil)
+    url := fmt.Sprintf("http://localhost:%d", actualPort)
+    openBrowser(url)
+    select {}
+}
+
+func openBrowser(url string) {
+    var cmd *exec.Cmd
+    switch runtime.GOOS {
+    case "darwin":
+        cmd = exec.Command("open", "-a", "Google Chrome", url)
+    case "linux":
+        cmd = exec.Command("google-chrome", url)
+    case "windows":
+        cmd = exec.Command("cmd", "/c", "start", "chrome.exe", url)
+    default:
+        fmt.Println("Unsupported OS for opening browser")
+        return
+    }
+    cmd.Start()
 }
