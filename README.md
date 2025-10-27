@@ -12,19 +12,55 @@ go build -o ollama-model-downloader
 
 Produces a single static binary.
 
+### Cross-platform builds
+
+To build for different platforms, set GOOS and GOARCH:
+
+```bash
+# Linux AMD64
+GOOS=linux GOARCH=amd64 go build -o ollama-model-downloader-linux-amd64
+
+# Windows AMD64
+GOOS=windows GOARCH=amd64 go build -o ollama-model-downloader-windows-amd64.exe
+
+# macOS AMD64
+GOOS=darwin GOARCH=amd64 go build -o ollama-model-downloader-macos-amd64
+
+# macOS ARM64 (Apple Silicon)
+GOOS=darwin GOARCH=arm64 go build -o ollama-model-downloader-macos-arm64
+
+# Linux ARM64
+GOOS=linux GOARCH=arm64 go build -o ollama-model-downloader-linux-arm64
+```
+
 ## Usage
+
+### CLI Mode
 
 ```
 ./ollama-model-downloader [flags] <model[:tag] | model@sha256:digest>
 
 Flags:
-  -o string          output zip path (default: <model>.zip)
-  -registry string   registry base URL (default "https://registry.ollama.ai")
-  -platform string   target platform (default derives from host, e.g. linux/amd64)
-  -concurrency int   concurrent blob downloads (default 4)
-  -v                 verbose logging
-  -keep-staging      keep staging directory after zip
+-o string              output zip path (default: <model>.zip)
+-output-dir string     directory to save downloaded models (default "downloaded-models")
+-registry string       registry base URL (default "https://registry.ollama.ai")
+-platform string       target platform (default derives from host, e.g. linux/amd64)
+  -concurrency int       concurrent blob downloads (default 4)
+  -retries int           number of retry attempts (default 3)
+  -port int              port to listen on for web UI (0 for random)
+  -v                     verbose logging
+  -keep-staging          keep staging directory after zip
 ```
+
+### Web UI Mode
+
+Run without arguments to start the web interface:
+
+```
+./ollama-model-downloader
+```
+
+Opens a web browser to `http://localhost:<port>` with a Persian UI for downloading models.
 
 Examples:
 
