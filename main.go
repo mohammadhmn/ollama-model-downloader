@@ -40,8 +40,9 @@ var globalCancel context.CancelFunc
 var currentMessage string
 
 type PageData struct {
-    Message string
-    ZipPath string
+    Message    string
+    ZipPath    string
+    Downloads  []string
 }
 
 type ProgressData struct {
@@ -102,6 +103,7 @@ retries     int
 timeout     time.Duration
 insecureTLS bool
 port        int
+	outputDir   string
 }
 
 func main() {
@@ -119,6 +121,7 @@ func main() {
     defaultPlatform := fmt.Sprintf("linux/%s", archFromGo(runtime.GOARCH))
     flag.StringVar(&opt.platform, "platform", defaultPlatform, "target platform (linux/amd64 or linux/arm64)")
     flag.StringVar(&opt.outZip, "o", "", "output zip path (default: <model>.zip)")
+    flag.StringVar(&opt.outputDir, "output-dir", "downloaded-models", "directory to save downloaded models")
     flag.IntVar(&opt.port, "port", 0, "port to listen on (0 for random)")
     flag.Parse()
 
@@ -135,7 +138,7 @@ func main() {
             if !strings.HasSuffix(strings.ToLower(sanitized), ".zip") {
                 sanitized += ".zip"
             }
-            opt.outZip = sanitized
+            opt.outZip = filepath.Join(opt.outputDir, sanitized)
         }
 
         if timeoutSec > 0 {
@@ -428,6 +431,9 @@ func run(ctx context.Context, opt options) error {
     }
 
     // 6) Zip models/ content to output zip
+    if err := os.MkdirAll(filepath.Dir(opt.outZip), 0755); err != nil {
+        return err
+    }
     if err := zipDir(modelsRoot, opt.outZip); err != nil {
         return fmt.Errorf("zip: %w", err)
     }
@@ -914,6 +920,15 @@ func startWebServer(port int) {
                 data.ZipPath = currentZip
             }
         }
+        // List downloaded models
+        downloadsDir := "downloaded-models"
+        if entries, err := os.ReadDir(downloadsDir); err == nil {
+            for _, entry := range entries {
+                if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".zip") {
+                    data.Downloads = append(data.Downloads, entry.Name())
+                }
+            }
+        }
         tmpl.Execute(w, data)
     })
 
@@ -927,6 +942,7 @@ func startWebServer(port int) {
             return
         }
         model := r.FormValue("model")
+        outputDir := "downloaded-models"
         concurrencyStr := r.FormValue("concurrency")
         concurrency, _ := strconv.Atoi(concurrencyStr)
         if concurrency <= 0 {
@@ -948,6 +964,7 @@ func startWebServer(port int) {
             retries:     retries,
             timeout:     0,
             insecureTLS: false,
+            outputDir:   outputDir,
         }
 
         // set outZip
@@ -957,10 +974,10 @@ func startWebServer(port int) {
         if !strings.HasSuffix(strings.ToLower(sanitized), ".zip") {
             sanitized += ".zip"
         }
-        opt.outZip = sanitized
+        opt.outZip = filepath.Join(opt.outputDir, sanitized)
         currentZip = opt.outZip
         currentProgress = newProgress(0) // total will be set later in run
-        currentMessage = "Downloading..."
+        currentMessage = "در حال دانلود..."
 
         ctx, cancel := context.WithCancel(context.Background())
         globalCancel = cancel
@@ -971,12 +988,12 @@ func startWebServer(port int) {
             currentProgress = nil
             if err != nil {
                 if err == context.Canceled {
-                    currentMessage = "Download cancelled."
+                    currentMessage = "دانلود لغو شد."
                 } else {
-                    currentMessage = fmt.Sprintf("Download failed: %s", err.Error())
+                    currentMessage = fmt.Sprintf("دانلود ناموفق: %s", err.Error())
                 }
             } else {
-                currentMessage = "Download completed."
+                currentMessage = "دانلود کامل شد."
             }
         }()
 

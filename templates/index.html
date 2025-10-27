@@ -1,12 +1,16 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fa" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ollama Model Downloader</title>
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@100..900&display=swap" rel="stylesheet">
+    <title>دانلود کننده مدل‌های Ollama</title>
     <style>
+        * {
+            font-family: 'Vazirmatn', 'Segoe UI', Tahoma, sans-serif;
+        }
+
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #3182ce 0%, #2c5282 100%);
             color: #333;
             margin: 0;
@@ -93,29 +97,39 @@
 </head>
 <body>
     <div class="container">
-        <h1>Ollama Model Downloader</h1>
+        <h1>دانلود کننده مدل‌های Ollama</h1>
         {{if .Message}}<div class="message">{{.Message}}</div>{{end}}
-        {{if .ZipPath}}<div class="download-link"><a href="/download/{{.ZipPath}}" download>Download {{.ZipPath}}</a></div>{{end}}
+        {{if .ZipPath}}<div class="download-link"><a href="/download/{{.ZipPath}}" download>دانلود {{.ZipPath}}</a></div>{{end}}
+        {{if .Downloads}}
+        <div style="margin: 20px 0;">
+            <h3 style="color: #4a5568; margin-bottom: 10px;">مدل‌های دانلود شده</h3>
+            <ul style="list-style: none; padding: 0;">
+                {{range .Downloads}}
+                <li style="margin: 5px 0;"><a href="/download/downloaded-models/{{.}}" style="color: #007bff; text-decoration: none;">{{.}}</a></li>
+                {{end}}
+            </ul>
+        </div>
+        {{end}}
         <div id="progressContainer" style="display:none; margin: 15px 0;">
             <progress id="progressBar" max="100" value="0" style="width: 100%; height: 20px;"></progress>
             <div id="progressText" style="text-align: center; margin-top: 5px;"></div>
         </div>
         {{if eq .Message "Downloading..."}}
         <div style="text-align: center; margin: 15px 0;">
-            <button onclick="cancelDownload()" style="padding: 10px 20px; background: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer;">Cancel Download</button>
+            <button onclick="cancelDownload()" style="padding: 10px 20px; background: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer;">لغو دانلود</button>
         </div>
         {{end}}
         <form action="/download" method="post">
-            <label for="model">Model Name</label>
-            <input type="text" id="model" name="model" placeholder="e.g., llama3.2" required>
+            <label for="model">نام مدل</label>
+            <input type="text" id="model" name="model" placeholder="مثال: llama3.2" required>
 
-            <label for="concurrency">Concurrency</label>
+            <label for="concurrency">همزمانی</label>
             <input type="number" id="concurrency" name="concurrency" value="4" min="1">
 
-            <label for="retries">Retries</label>
+            <label for="retries">تلاش مجدد</label>
             <input type="number" id="retries" name="retries" value="3" min="0">
 
-            <button type="submit">Download Model</button>
+            <button type="submit">دانلود مدل</button>
         </form>
     </div>
     <script>
