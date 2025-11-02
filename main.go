@@ -904,7 +904,11 @@ func backoff(i int, verbose bool) {
 }
 
 func startWebServer(port int) {
-	tmpl, err := template.ParseFS(templateFS, "templates/index.html")
+	// Create template with custom functions
+	funcMap := template.FuncMap{
+		"contains": strings.Contains,
+	}
+	tmpl, err := template.New("index.html").Funcs(funcMap).ParseFS(templateFS, "templates/index.html")
 	if err != nil {
 		fmt.Println("Error parsing template:", err)
 		return
