@@ -11,6 +11,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"hash"
 	"html/template"
 	"io"
 	"math/rand"
@@ -40,13 +41,151 @@ var currentZip string
 var currentProgress *progress
 var globalCancel context.CancelFunc
 var currentMessage string
+var pauseRequested atomic.Bool
+var currentSessionDir string
 
 type PageData struct {
 	Message   string
 	ZipPath   string
 	Downloads []string
+	PartialSessions []partialSessionView
 }
 
+type sessionMeta struct {
+	Model       string    `json:"model"`
+	SessionID   string    `json:"sessionId"`
+	OutZip      string    `json:"outZip"`
+	StagingRoot string    `json:"stagingRoot"`
+	Registry    string    `json:"registry"`
+	Platform    string    `json:"platform"`
+	Concurrency int       `json:"concurrency"`
+	Retries     int       `json:"retries"`
+	StartedAt   time.Time `json:"startedAt"`
+	LastUpdated time.Time `json:"lastUpdated"`
+	Status      string    `json:"status"`
+}
+
+const sessionMetaFileName = "session.json"
+
+func sessionMetaPath(dir string) string {
+	return filepath.Join(dir, sessionMetaFileName)
+}
+
+func loadSessionMeta(dir string) (sessionMeta, error) {
+	var meta sessionMeta
+	data, err := os.ReadFile(sessionMetaPath(dir))
+	if err != nil {
+		return meta, err
+	}
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return meta, err
+	}
+	return meta, nil
+}
+
+func saveSessionMeta(meta sessionMeta) error {
+	meta.LastUpdated = time.Now()
+	data, err := json.MarshalIndent(meta, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(sessionMetaPath(meta.StagingRoot), data, 0o644)
+}
+
+type partialSessionView struct {
+	Model      string
+	SessionID  string
+	Started    string
+	Updated    string
+	Status     string
+}
+
+func discoverPartialSessions(outputDir string) ([]sessionMeta, error) {
+	entries, err := os.ReadDir(outputDir)
+	if err != nil {
+		return nil, err
+	}
+	var sessions []sessionMeta
+	for _, entry := range entries {
+		if !entry.IsDir() || !strings.HasSuffix(entry.Name(), ".staging") {
+			continue
+		}
+		meta, err := loadSessionMeta(filepath.Join(outputDir, entry.Name()))
+		if err != nil {
+			continue
+		}
+		sessions = append(sessions, meta)
+	}
+	return sessions, nil
+}
+
+func sessionViewsFromMetaList(metas []sessionMeta) []partialSessionView {
+	sort.Slice(metas, func(i, j int) bool {
+		return metas[i].LastUpdated.After(metas[j].LastUpdated)
+	})
+	formatTime := func(t time.Time) string {
+		if t.IsZero() {
+			return "نامشخص"
+		}
+		return t.Format("2006-01-02 15:04:05")
+	}
+	views := make([]partialSessionView, 0, len(metas))
+	for _, meta := range metas {
+		views = append(views, partialSessionView{
+			Model:     meta.Model,
+			SessionID: meta.SessionID,
+			Started:   formatTime(meta.StartedAt),
+			Updated:   formatTime(meta.LastUpdated),
+			Status:    meta.Status,
+		})
+	}
+	return views
+}
+
+func beginDownloadSession(opt options, startMessage string) {
+	pauseRequested.Store(false)
+	currentZip = opt.outZip
+	currentProgress = newProgress(0)
+	currentMessage = startMessage
+	currentSessionDir = opt.stagingDir
+
+	ctx, cancel := context.WithCancel(context.Background())
+	globalCancel = cancel
+
+	go func() {
+		err := run(ctx, opt)
+		globalCancel = nil
+		currentProgress = nil
+		currentSessionDir = ""
+		paused := pauseRequested.Load()
+		pauseRequested.Store(false)
+		if err != nil {
+			if err == context.Canceled {
+				if paused {
+					currentMessage = "دانلود متوقف شد."
+				} else {
+					currentMessage = "دانلود لغو شد."
+				}
+			} else {
+				currentMessage = fmt.Sprintf("دانلود ناموفق: %s", err.Error())
+			}
+		} else {
+			currentMessage = "دانلود کامل شد."
+		}
+	}()
+}
+
+func setSessionStatus(dir, status string) {
+	if dir == "" {
+		return
+	}
+	meta, err := loadSessionMeta(dir)
+	if err != nil {
+		return
+	}
+	meta.Status = status
+	_ = saveSessionMeta(meta)
+}
 type ProgressData struct {
 	Done    int64 `json:"done"`
 	Total   int64 `json:"total"`
@@ -106,6 +245,8 @@ type options struct {
 	insecureTLS bool
 	port        int
 	outputDir   string
+	sessionID   string
+	stagingDir  string
 }
 
 func main() {
@@ -131,17 +272,15 @@ func main() {
 		startWebServer(opt.port)
 	} else {
 		opt.model = flag.Arg(0)
-
+		opt.sessionID = sanitizeModelName(opt.model)
 		if opt.outZip == "" {
-			// sanitize model name to be filesystem friendly
-			sanitized := strings.ReplaceAll(opt.model, "/", "-")
-			sanitized = strings.ReplaceAll(sanitized, ":", "-")
-			sanitized = strings.ReplaceAll(sanitized, "@", "-")
-			if !strings.HasSuffix(strings.ToLower(sanitized), ".zip") {
-				sanitized += ".zip"
+			zipName := opt.sessionID
+			if !strings.HasSuffix(strings.ToLower(zipName), ".zip") {
+				zipName += ".zip"
 			}
-			opt.outZip = filepath.Join(opt.outputDir, sanitized)
+			opt.outZip = filepath.Join(opt.outputDir, zipName)
 		}
+		opt.stagingDir = filepath.Join(opt.outputDir, opt.sessionID+".staging")
 
 		if timeoutSec > 0 {
 			opt.timeout = time.Duration(timeoutSec) * time.Second
@@ -165,6 +304,26 @@ func archFromGo(goarch string) string {
 	default:
 		return goarch
 	}
+}
+
+func sanitizeModelName(model string) string {
+	s := strings.TrimSpace(model)
+	if s == "" {
+		return "model"
+	}
+	s = strings.Map(func(r rune) rune {
+		switch {
+		case r == '/' || r == ':' || r == '@' || r == '\\' || r == ' ':
+			return '-'
+		default:
+			return r
+		}
+	}, s)
+	s = strings.ToLower(strings.Trim(s, "-"))
+	if s == "" {
+		return "model"
+	}
+	return s
 }
 
 type modelRef struct {
@@ -344,11 +503,17 @@ func run(ctx context.Context, opt options) error {
 		return fmt.Errorf("unsupported manifest type: %s; body: %s", manifestType, snippet)
 	}
 
-	// 3) Stage files in temp dir
-	stagingRoot, err := os.MkdirTemp(".", "ollama-staging-")
+	// 3) Stage files in a reusable directory
+	stagingRoot, err := ensureStagingRoot(opt)
 	if err != nil {
 		return err
 	}
+	success := false
+	defer func() {
+		if success && !opt.keepStaging {
+			_ = os.RemoveAll(stagingRoot)
+		}
+	}()
 	// create models/{manifests,blobs}
 	modelsRoot := filepath.Join(stagingRoot, "models")
 	blobsDir := filepath.Join(modelsRoot, "blobs")
@@ -357,6 +522,26 @@ func run(ctx context.Context, opt options) error {
 		return err
 	}
 	if err := os.MkdirAll(manifestsDir, 0o755); err != nil {
+		return err
+	}
+
+	meta, metaErr := loadSessionMeta(stagingRoot)
+	if metaErr != nil && !errors.Is(metaErr, os.ErrNotExist) {
+		return metaErr
+	}
+	if meta.SessionID == "" {
+		meta.SessionID = opt.sessionID
+		meta.Model = opt.model
+		meta.StartedAt = time.Now()
+	}
+	meta.OutZip = opt.outZip
+	meta.Registry = opt.registry
+	meta.Platform = opt.platform
+	meta.Concurrency = opt.concurrency
+	meta.Retries = opt.retries
+	meta.StagingRoot = stagingRoot
+	meta.Status = "in-progress"
+	if err := saveSessionMeta(meta); err != nil {
 		return err
 	}
 
@@ -409,6 +594,11 @@ func run(ctx context.Context, opt options) error {
 		}
 	}
 
+	existingTotal := computeExistingBytes(blobsDir, items)
+	if p != nil {
+		p.SetDone(existingTotal)
+	}
+
 	sem := make(chan struct{}, max(1, opt.concurrency))
 	errCh := make(chan error, len(items))
 	for _, it := range items {
@@ -445,12 +635,10 @@ func run(ctx context.Context, opt options) error {
 		fmt.Println("OK:", opt.outZip)
 	}
 
-	// 7) Cleanup staging
-	if !opt.keepStaging {
-		_ = os.RemoveAll(stagingRoot)
-	} else {
+	if opt.keepStaging {
 		fmt.Println("staging kept at:", stagingRoot)
 	}
+	success = true
 	return nil
 }
 
@@ -605,25 +793,35 @@ func downloadBlob(ctx context.Context, client *http.Client, registryBase, reposi
 	}
 	hexhash := strings.TrimPrefix(digest, "sha256:")
 	outPath := filepath.Join(blobsDir, "sha256-"+hexhash)
-	// Skip if file exists with nonzero size
-	if st, err := os.Stat(outPath); err == nil && st.Size() > 0 {
-		if verbose {
-			fmt.Printf("blob exists, skipping: %s\n", outPath)
+	if st, err := os.Stat(outPath); err == nil {
+		if expectedSize <= 0 || st.Size() >= expectedSize {
+			if verbose {
+				fmt.Printf("blob exists, skipping: %s\n", outPath)
+			}
+			return nil
 		}
-		if p != nil && expectedSize > 0 {
-			p.Add(expectedSize)
-		}
-		return nil
 	}
-	// download to temp then rename
-	tmp := outPath + ".part"
-	f, err := os.Create(tmp)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
 
-	u := fmt.Sprintf("%s/v2/%s/blobs/%s", strings.TrimRight(registryBase, "/"), repository, digest)
+	tmp := outPath + ".part"
+	if expectedSize > 0 {
+		if st, err := os.Stat(tmp); err == nil && st.Size() == expectedSize {
+			if ok, err := verifyFileHash(tmp, hexhash); err == nil && ok {
+				if verbose {
+					fmt.Printf("resuming blob already downloaded: %s\n", tmp)
+				}
+				return os.Rename(tmp, outPath)
+			}
+		}
+	}
+
+	start := int64(0)
+	if st, err := os.Stat(tmp); err == nil {
+		start = st.Size()
+		if expectedSize > 0 && start > expectedSize {
+			start = expectedSize
+		}
+	}
+
 	headers := map[string]string{
 		"Accept":     "application/octet-stream",
 		"User-Agent": "ollama-model-downloader/1.0",
@@ -631,31 +829,130 @@ func downloadBlob(ctx context.Context, client *http.Client, registryBase, reposi
 	if token != "" {
 		headers["Authorization"] = "Bearer " + token
 	}
+	if start > 0 {
+		headers["Range"] = fmt.Sprintf("bytes=%d-", start)
+		if verbose {
+			fmt.Printf("resuming blob %s from %d bytes\n", digest, start)
+		}
+	}
+
+	u := fmt.Sprintf("%s/v2/%s/blobs/%s", strings.TrimRight(registryBase, "/"), repository, digest)
 	resp, err := httpReqWithRetry(ctx, client, http.MethodGet, u, headers, retries, verbose)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
 		return fmt.Errorf("blob fetch failed (%s): %s", digest, resp.Status)
 	}
-	// Optional: verify sha256 while streaming and update progress
-	hasher := sha256.New()
-	var w io.Writer = io.MultiWriter(f, hasher)
-	if p != nil {
-		w = io.MultiWriter(f, hasher, p)
-	}
-	if _, err := io.Copy(w, resp.Body); err != nil {
+
+	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
 		return err
 	}
+	defer func() {
+		if f != nil {
+			f.Close()
+		}
+	}()
+	if _, err := f.Seek(start, io.SeekStart); err != nil {
+		return err
+	}
+
+	hasher := sha256.New()
+	if start > 0 {
+		if err := hashExistingFile(tmp, hasher); err != nil {
+			return err
+		}
+	}
+
+	if resp.StatusCode == http.StatusOK && start > 0 {
+		if err := f.Truncate(0); err != nil {
+			return err
+		}
+		if _, err := f.Seek(0, io.SeekStart); err != nil {
+			return err
+		}
+		if p != nil {
+			p.Add(-start)
+		}
+		hasher.Reset()
+		start = 0
+	}
+
+	writers := []io.Writer{f, hasher}
+	if p != nil {
+		writers = append(writers, p)
+	}
+	if _, err := io.Copy(io.MultiWriter(writers...), resp.Body); err != nil {
+		return err
+	}
+
 	sum := hex.EncodeToString(hasher.Sum(nil))
 	if sum != hexhash {
 		return fmt.Errorf("sha256 mismatch for %s: got %s", digest, sum)
 	}
+
 	if err := f.Close(); err != nil {
 		return err
 	}
+	f = nil
 	return os.Rename(tmp, outPath)
+}
+
+func hashExistingFile(path string, hasher hash.Hash) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = io.Copy(hasher, f)
+	return err
+}
+
+func verifyFileHash(path, expected string) (bool, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return false, err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return false, err
+	}
+	return hex.EncodeToString(h.Sum(nil)) == expected, nil
+}
+
+func computeExistingBytes(blobsDir string, items []blobItem) int64 {
+	var total int64
+	for _, it := range items {
+		total += existingBytesForBlob(blobsDir, it.digest, it.size)
+	}
+	return total
+}
+
+func existingBytesForBlob(blobsDir, digest string, expected int64) int64 {
+	if !strings.HasPrefix(digest, "sha256:") {
+		return 0
+	}
+	hexhash := strings.TrimPrefix(digest, "sha256:")
+	outPath := filepath.Join(blobsDir, "sha256-"+hexhash)
+	if st, err := os.Stat(outPath); err == nil {
+		size := st.Size()
+		if expected > 0 && size > expected {
+			return expected
+		}
+		return size
+	}
+	tmp := outPath + ".part"
+	if st, err := os.Stat(tmp); err == nil {
+		size := st.Size()
+		if expected > 0 && size > expected {
+			return expected
+		}
+		return size
+	}
+	return 0
 }
 
 func zipDir(root, outZip string) error {
@@ -714,6 +1011,16 @@ func zipDir(root, outZip string) error {
 	})
 }
 
+func ensureStagingRoot(opt options) (string, error) {
+	if opt.stagingDir != "" {
+		if err := os.MkdirAll(opt.stagingDir, 0o755); err != nil {
+			return "", err
+		}
+		return opt.stagingDir, nil
+	}
+	return os.MkdirTemp(".", "ollama-staging-")
+}
+
 func max(a, b int) int {
 	if a > b {
 		return a
@@ -747,7 +1054,25 @@ func (p *progress) Add(n int64) {
 	if p == nil {
 		return
 	}
-	atomic.AddInt64(&p.done, n)
+	newVal := atomic.AddInt64(&p.done, n)
+	if newVal < 0 {
+		atomic.StoreInt64(&p.done, 0)
+	} else if p.total > 0 && newVal > p.total {
+		atomic.StoreInt64(&p.done, p.total)
+	}
+}
+
+func (p *progress) SetDone(n int64) {
+	if p == nil {
+		return
+	}
+	if n < 0 {
+		n = 0
+	}
+	if p.total > 0 && n > p.total {
+		n = p.total
+	}
+	atomic.StoreInt64(&p.done, n)
 }
 
 func (p *progress) Start() {
@@ -914,6 +1239,12 @@ func startWebServer(port int) {
 		return
 	}
 
+	downloadsDir := "downloaded-models"
+	if err := os.MkdirAll(downloadsDir, 0o755); err != nil {
+		fmt.Println("Error creating downloads directory:", err)
+		return
+	}
+
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -926,13 +1257,15 @@ func startWebServer(port int) {
 			}
 		}
 		// List downloaded models
-		downloadsDir := "downloaded-models"
 		if entries, err := os.ReadDir(downloadsDir); err == nil {
 			for _, entry := range entries {
 				if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".zip") {
 					data.Downloads = append(data.Downloads, entry.Name())
 				}
 			}
+		}
+		if sessions, err := discoverPartialSessions(downloadsDir); err == nil {
+			data.PartialSessions = sessionViewsFromMetaList(sessions)
 		}
 		tmpl.Execute(w, data)
 	})
@@ -947,7 +1280,7 @@ func startWebServer(port int) {
 			return
 		}
 		model := r.FormValue("model")
-		outputDir := "downloaded-models"
+		outputDir := downloadsDir
 		concurrencyStr := r.FormValue("concurrency")
 		concurrency, _ := strconv.Atoi(concurrencyStr)
 		if concurrency <= 0 {
@@ -972,36 +1305,82 @@ func startWebServer(port int) {
 			outputDir:   outputDir,
 		}
 
-		// set outZip
-		sanitized := strings.ReplaceAll(opt.model, "/", "-")
-		sanitized = strings.ReplaceAll(sanitized, ":", "-")
-		sanitized = strings.ReplaceAll(sanitized, "@", "-")
-		if !strings.HasSuffix(strings.ToLower(sanitized), ".zip") {
-			sanitized += ".zip"
+		sessionID := sanitizeModelName(opt.model)
+		opt.sessionID = sessionID
+		zipName := sessionID
+		if !strings.HasSuffix(strings.ToLower(zipName), ".zip") {
+			zipName += ".zip"
 		}
-		opt.outZip = filepath.Join(opt.outputDir, sanitized)
-		currentZip = opt.outZip
-		currentProgress = newProgress(0) // total will be set later in run
-		currentMessage = "در حال دانلود..."
+		opt.outZip = filepath.Join(opt.outputDir, zipName)
+		opt.stagingDir = filepath.Join(opt.outputDir, sessionID+".staging")
 
-		ctx, cancel := context.WithCancel(context.Background())
-		globalCancel = cancel
+		beginDownloadSession(opt, "در حال دانلود...")
 
-		go func() {
-			err := run(ctx, opt)
-			globalCancel = nil
-			currentProgress = nil
-			if err != nil {
-				if err == context.Canceled {
-					currentMessage = "دانلود لغو شد."
-				} else {
-					currentMessage = fmt.Sprintf("دانلود ناموفق: %s", err.Error())
-				}
-			} else {
-				currentMessage = "دانلود کامل شد."
+		http.Redirect(w, r, "/", http.StatusFound)
+	})
+
+	http.HandleFunc("/resume", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Bad request", http.StatusBadRequest)
+			return
+		}
+		sessionID := r.FormValue("session")
+		if sessionID == "" {
+			http.Error(w, "Missing session ID", http.StatusBadRequest)
+			return
+		}
+		staging := filepath.Join(downloadsDir, sessionID+".staging")
+		meta, err := loadSessionMeta(staging)
+		if err != nil {
+			http.Error(w, "Session not found", http.StatusNotFound)
+			return
+		}
+		registry := meta.Registry
+		if registry == "" {
+			registry = defaultRegistry
+		}
+		platform := meta.Platform
+		if platform == "" {
+			platform = fmt.Sprintf("linux/%s", archFromGo(runtime.GOARCH))
+		}
+		concurrency := meta.Concurrency
+		if concurrency <= 0 {
+			concurrency = 4
+		}
+		retries := meta.Retries
+		if retries < 0 {
+			retries = 3
+		}
+
+		zipPath := meta.OutZip
+		if zipPath == "" {
+			name := sessionID
+			if !strings.HasSuffix(strings.ToLower(name), ".zip") {
+				name += ".zip"
 			}
-		}()
+			zipPath = filepath.Join(downloadsDir, name)
+		}
 
+		opt := options{
+			model:       meta.Model,
+			registry:    registry,
+			platform:    platform,
+			concurrency: concurrency,
+			verbose:     false,
+			keepStaging: false,
+			retries:     retries,
+			timeout:     0,
+			insecureTLS: false,
+			outputDir:   downloadsDir,
+			sessionID:   meta.SessionID,
+			stagingDir:  staging,
+			outZip:      zipPath,
+		}
+		beginDownloadSession(opt, "در حال ادامه دانلود...")
 		http.Redirect(w, r, "/", http.StatusFound)
 	})
 
@@ -1044,7 +1423,21 @@ func startWebServer(port int) {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
+		pauseRequested.Store(false)
 		if globalCancel != nil {
+			globalCancel()
+		}
+		http.Redirect(w, r, "/", http.StatusFound)
+	})
+
+	http.HandleFunc("/pause", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if globalCancel != nil {
+			pauseRequested.Store(true)
+			setSessionStatus(currentSessionDir, "paused")
 			globalCancel()
 		}
 		http.Redirect(w, r, "/", http.StatusFound)
