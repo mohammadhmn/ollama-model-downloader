@@ -35,6 +35,7 @@ var templateFS embed.FS
 
 const (
 	defaultRegistry = "https://registry.ollama.ai"
+	defaultWebPort  = 8080
 )
 
 var currentZip string
@@ -45,10 +46,12 @@ var pauseRequested atomic.Bool
 var currentSessionDir string
 
 type PageData struct {
-	Message   string
-	ZipPath   string
-	Downloads []string
-	PartialSessions []partialSessionView
+	Message         string
+	ZipPath         string
+	Downloads       []string
+	RunningSession  *partialSessionView
+	PausedSessions  []partialSessionView
+	ErroredSessions []partialSessionView
 }
 
 type sessionMeta struct {
@@ -62,7 +65,8 @@ type sessionMeta struct {
 	Retries     int       `json:"retries"`
 	StartedAt   time.Time `json:"startedAt"`
 	LastUpdated time.Time `json:"lastUpdated"`
-	Status      string    `json:"status"`
+	State       string    `json:"state"`
+	Message     string    `json:"message"`
 }
 
 const sessionMetaFileName = "session.json"
@@ -97,7 +101,8 @@ type partialSessionView struct {
 	SessionID  string
 	Started    string
 	Updated    string
-	Status     string
+	StateLabel string
+	Message    string
 }
 
 func discoverPartialSessions(outputDir string) ([]sessionMeta, error) {
@@ -119,27 +124,61 @@ func discoverPartialSessions(outputDir string) ([]sessionMeta, error) {
 	return sessions, nil
 }
 
-func sessionViewsFromMetaList(metas []sessionMeta) []partialSessionView {
+func categorizeSessions(metas []sessionMeta) (running *partialSessionView, paused, errored []partialSessionView) {
 	sort.Slice(metas, func(i, j int) bool {
 		return metas[i].LastUpdated.After(metas[j].LastUpdated)
 	})
-	formatTime := func(t time.Time) string {
-		if t.IsZero() {
-			return "نامشخص"
-		}
-		return t.Format("2006-01-02 15:04:05")
-	}
-	views := make([]partialSessionView, 0, len(metas))
 	for _, meta := range metas {
-		views = append(views, partialSessionView{
-			Model:     meta.Model,
-			SessionID: meta.SessionID,
-			Started:   formatTime(meta.StartedAt),
-			Updated:   formatTime(meta.LastUpdated),
-			Status:    meta.Status,
-		})
+		view := sessionViewFromMeta(meta)
+		switch strings.ToLower(meta.State) {
+		case "downloading":
+			if running == nil {
+				tmp := view
+				running = &tmp
+			}
+		case "paused":
+			paused = append(paused, view)
+		case "error":
+			errored = append(errored, view)
+		default:
+			paused = append(paused, view)
+		}
 	}
-	return views
+	return
+}
+
+func sessionViewFromMeta(meta sessionMeta) partialSessionView {
+	return partialSessionView{
+		Model:      meta.Model,
+		SessionID:  meta.SessionID,
+		Started:    formatSessionTime(meta.StartedAt),
+		Updated:    formatSessionTime(meta.LastUpdated),
+		StateLabel: stateLabel(meta.State),
+		Message:    meta.Message,
+	}
+}
+
+func formatSessionTime(t time.Time) string {
+	if t.IsZero() {
+		return "نامشخص"
+	}
+	return t.Format("2006-01-02 15:04:05")
+}
+
+func stateLabel(state string) string {
+	switch strings.ToLower(state) {
+	case "downloading":
+		return "در حال دانلود"
+	case "paused":
+		return "مکث شده"
+	case "error":
+		return "خطا"
+	default:
+		if state == "" {
+			return "در انتظار"
+		}
+		return state
+	}
 }
 
 func beginDownloadSession(opt options, startMessage string) {
@@ -167,6 +206,7 @@ func beginDownloadSession(opt options, startMessage string) {
 					currentMessage = "دانلود لغو شد."
 				}
 			} else {
+				setSessionStatus(opt.stagingDir, "error", err.Error())
 				currentMessage = fmt.Sprintf("دانلود ناموفق: %s", err.Error())
 			}
 		} else {
@@ -175,7 +215,7 @@ func beginDownloadSession(opt options, startMessage string) {
 	}()
 }
 
-func setSessionStatus(dir, status string) {
+func setSessionStatus(dir, state, message string) {
 	if dir == "" {
 		return
 	}
@@ -183,9 +223,11 @@ func setSessionStatus(dir, status string) {
 	if err != nil {
 		return
 	}
-	meta.Status = status
+	meta.State = state
+	meta.Message = message
 	_ = saveSessionMeta(meta)
 }
+
 type ProgressData struct {
 	Done    int64 `json:"done"`
 	Total   int64 `json:"total"`
@@ -540,7 +582,8 @@ func run(ctx context.Context, opt options) error {
 	meta.Concurrency = opt.concurrency
 	meta.Retries = opt.retries
 	meta.StagingRoot = stagingRoot
-	meta.Status = "in-progress"
+	meta.State = "downloading"
+	meta.Message = "در حال دانلود..."
 	if err := saveSessionMeta(meta); err != nil {
 		return err
 	}
@@ -1265,7 +1308,10 @@ func startWebServer(port int) {
 			}
 		}
 		if sessions, err := discoverPartialSessions(downloadsDir); err == nil {
-			data.PartialSessions = sessionViewsFromMetaList(sessions)
+			running, paused, errored := categorizeSessions(sessions)
+			data.RunningSession = running
+			data.PausedSessions = paused
+			data.ErroredSessions = errored
 		}
 		tmpl.Execute(w, data)
 	})
@@ -1380,6 +1426,7 @@ func startWebServer(port int) {
 			stagingDir:  staging,
 			outZip:      zipPath,
 		}
+		setSessionStatus(staging, "downloading", "در حال ادامه دانلود...")
 		beginDownloadSession(opt, "در حال ادامه دانلود...")
 		http.Redirect(w, r, "/", http.StatusFound)
 	})
@@ -1425,6 +1472,7 @@ func startWebServer(port int) {
 		}
 		pauseRequested.Store(false)
 		if globalCancel != nil {
+			setSessionStatus(currentSessionDir, "paused", "لغو شد")
 			globalCancel()
 		}
 		http.Redirect(w, r, "/", http.StatusFound)
@@ -1437,23 +1485,28 @@ func startWebServer(port int) {
 		}
 		if globalCancel != nil {
 			pauseRequested.Store(true)
-			setSessionStatus(currentSessionDir, "paused")
+			setSessionStatus(currentSessionDir, "paused", "مکث شد")
 			globalCancel()
 		}
 		http.Redirect(w, r, "/", http.StatusFound)
 	})
 
-	addr := ":0"
-	if port != 0 {
-		addr = fmt.Sprintf(":%d", port)
+	bindPort := port
+	if bindPort == 0 {
+		bindPort = defaultWebPort
 	}
+	addr := fmt.Sprintf(":%d", bindPort)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
-		fmt.Println("Error starting server:", err)
-		return
+		fmt.Printf("پورت %d در دسترس نیست، استفاده از پورت تصادفی...\n", bindPort)
+		listener, err = net.Listen("tcp", ":0")
+		if err != nil {
+			fmt.Println("Error starting server:", err)
+			return
+		}
 	}
 	actualPort := listener.Addr().(*net.TCPAddr).Port
-	fmt.Printf("Starting web server on :%d\n", actualPort)
+	fmt.Printf("Running on http://localhost:%d\n", actualPort)
 	go http.Serve(listener, nil)
 	url := fmt.Sprintf("http://localhost:%d", actualPort)
 	openBrowser(url)

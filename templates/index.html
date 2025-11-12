@@ -3,158 +3,460 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@100..900&display=swap" rel="stylesheet">
-    <title>دانلود کننده مدل‌های Ollama</title>
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@200;400;500;700&display=swap" rel="stylesheet">
+    <title>دانلود مدل‌های Ollama</title>
     <style>
         * {
+            box-sizing: border-box;
             font-family: 'Vazirmatn', 'Segoe UI', Tahoma, sans-serif;
         }
-
         body {
-            background: linear-gradient(135deg, #3182ce 0%, #2c5282 100%);
-            color: #333;
+            background: linear-gradient(135deg, #0f172a, #1e1b4b);
+            color: #0f172a;
             margin: 0;
             padding: 0;
+        }
+        .page {
+            width: min(1100px, 100%);
+            margin: 0 auto;
+            padding: 32px 20px 60px;
+        }
+        .hero {
             display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 28px;
         }
-        .container {
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-            padding: 40px;
-            max-width: 500px;
-            width: 100%;
+        .hero__title h1 {
+            margin: 0;
+            font-size: 34px;
+            color: #fff;
         }
-        h1 {
-            text-align: center;
-            color: #4a5568;
-            margin-bottom: 30px;
-            font-weight: 300;
+        .hero__title p {
+            margin-top: 8px;
+            color: rgba(255, 255, 255, 0.8);
         }
-        .message {
-            background: #d4edda;
-            color: #155724;
-            padding: 10px;
-            border-radius: 5px;
-            margin: 15px 0;
-            text-align: center;
+        .hero__title .eyebrow {
+            margin: 0 0 6px;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            font-size: 12px;
+            color: #cbd5f5;
         }
-        .download-link {
-            text-align: center;
-            margin: 15px 0;
+        .subtitle {
+            margin: 2px 0 0;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.75);
         }
-        .download-link a {
-            color: #007bff;
-            text-decoration: none;
-            font-weight: bold;
-        }
-        .download-link a:hover {
-            text-decoration: underline;
-        }
-        form {
+        .hero__actions {
+            min-width: 240px;
+            flex: 1;
             display: flex;
             flex-direction: column;
+            gap: 12px;
+            align-items: flex-end;
         }
-        label {
-            display: block;
-            margin-bottom: 5px;
+        .hero__message {
+            width: 100%;
+            border-radius: 12px;
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.18);
+            color: #fde68a;
+            text-align: center;
             font-weight: 500;
-            color: #4a5568;
         }
-        input {
-            padding: 12px;
-            border: 2px solid #e2e8f0;
-            border-radius: 5px;
-            margin-bottom: 20px;
-            font-size: 16px;
-            transition: border-color 0.3s;
+        .hero__download {
+            width: 100%;
+            text-align: center;
+            padding: 14px 18px;
+            border-radius: 14px;
+            text-decoration: none;
+            font-weight: 600;
+            color: #0f172a;
+            background: #facc15;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
         }
-        input:focus {
-            outline: none;
-            border-color: #3182ce;
+        .hero__download--disabled {
+            background: rgba(248, 250, 252, 0.6);
+            color: #475569;
+            cursor: not-allowed;
         }
-        button {
-            padding: 12px;
-            background: #3182ce;
-            color: white;
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 28px;
+        }
+        .card {
+            background: #fff;
+            border-radius: 24px;
+            padding: 24px;
+            box-shadow: 0 10px 40px rgba(15, 23, 42, 0.1);
+        }
+        .card--active {
+            background: linear-gradient(135deg, #1e1b4b, #312e81);
+            color: #fff;
+        }
+        .card--active .card__title h2,
+        .card--active .card__meta,
+        .card--active .card__model,
+        .card--active .card__note {
+            color: #fff;
+        }
+        .card__title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+        .card__title h2,
+        .card__title h3 {
+            margin: 0;
+            font-size: 22px;
+        }
+        .card__model {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+        .card__meta {
+            font-size: 13px;
+            color: #475569;
+            margin: 0;
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .card--active .card__meta span {
+            color: rgba(255, 255, 255, 0.8);
+        }
+        .card__note {
+            margin-top: 12px;
+            font-size: 13px;
+            color: #475569;
+        }
+        .card--active .card__note {
+            color: rgba(255, 255, 255, 0.78);
+        }
+        .badge {
+            padding: 4px 12px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .badge--primary {
+            background: rgba(248, 250, 252, 0.2);
+            color: #fff;
+        }
+        .badge--secondary {
+            background: #e2e8f0;
+            color: #0f172a;
+        }
+        .badge--error {
+            background: #fee2e2;
+            color: #b91c1c;
+        }
+        .card__empty {
+            margin: 20px 0 0;
+            font-size: 14px;
+            color: #475569;
+        }
+        .progress-row {
+            margin-top: 18px;
+            display: none;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .card--active .progress-row {
+            display: flex;
+        }
+        progress {
+            width: 100%;
+            height: 12px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.15);
+            overflow: hidden;
+            appearance: none;
+        }
+        progress::-webkit-progress-bar {
+            background: rgba(255, 255, 255, 0.15);
+        }
+        progress::-webkit-progress-value {
+            background: #facc15;
+        }
+        .card__actions {
+            margin-top: 18px;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .card__actions button {
             border: none;
-            border-radius: 5px;
+            padding: 10px 18px;
+            border-radius: 999px;
+            font-weight: 600;
             cursor: pointer;
-            font-size: 16px;
-            font-weight: 500;
-            transition: background 0.3s;
+            transition: transform 0.2s ease;
         }
-        button:hover {
-            background: #2c5282;
-        }
-        button:active {
+        .card__actions button:active {
             transform: translateY(1px);
+        }
+        .card__actions button:first-of-type {
+            background: #f97316;
+            color: #fff;
+        }
+        .card__actions button:last-of-type {
+            background: #dc2626;
+            color: #fff;
+        }
+        .card--paused .session-list,
+        .card--error .session-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .session-card {
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            padding: 12px 14px;
+            border-radius: 16px;
+            background: #f8fafc;
+        }
+        .session-card strong {
+            display: block;
+            font-size: 16px;
+        }
+        .session-card span {
+            font-size: 12px;
+            color: #475569;
+        }
+        .session-card .session-details {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 6px;
+            gap: 12px;
+        }
+        .session-card form button {
+            background: #2563eb;
+            border: none;
+            color: #fff;
+            padding: 6px 14px;
+            border-radius: 999px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .session-card p {
+            margin: 4px 0 0;
+            font-size: 12px;
+            color: #475569;
+        }
+        .downloads-card {
+            margin-bottom: 28px;
+        }
+        .downloads-card ul {
+            list-style: none;
+            padding: 0;
+            margin: 12px 0 0;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+        }
+        .downloads-card li {
+            background: #f1f5f9;
+            border-radius: 12px;
+            padding: 10px 14px;
+            font-size: 14px;
+        }
+        .downloads-card li a {
+            color: #1d4ed8;
+            text-decoration: none;
+            word-break: break-all;
+        }
+        .form-card form {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .form-card label {
+            font-weight: 600;
+            color: #0f172a;
+        }
+        .form-card input {
+            width: 100%;
+            border-radius: 12px;
+            border: 2px solid #e2e8f0;
+            padding: 12px 14px;
+            font-size: 14px;
+        }
+        .form-card button {
+            padding: 12px;
+            border-radius: 14px;
+            border: none;
+            font-weight: 600;
+            background: #0f172a;
+            color: #fff;
+            cursor: pointer;
+        }
+        @media (max-width: 640px) {
+            .hero {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .card__meta {
+                flex-direction: column;
+            }
+            .card__actions {
+                justify-content: center;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>دانلود کننده مدل‌های Ollama</h1>
-        {{if .Message}}<div class="message">{{.Message}}</div>{{end}}
-        {{if .ZipPath}}<div class="download-link"><a href="/download/{{.ZipPath}}" download>دانلود {{.ZipPath}}</a></div>{{end}}
-        {{if .Downloads}}
-        <div style="margin: 20px 0;">
-            <h3 style="color: #4a5568; margin-bottom: 10px;">مدل‌های دانلود شده</h3>
-            <ul style="list-style: none; padding: 0;">
-                {{range .Downloads}}
-                <li style="margin: 5px 0;"><a href="/download/downloaded-models/{{.}}" style="color: #007bff; text-decoration: none;">{{.}}</a></li>
+    <div class="page">
+        <header class="hero">
+            <div class="hero__title">
+                <p class="eyebrow">دانلود مستقیم از رجیستری Ollama</p>
+                <h1>مدل‌های Ollama را بدون ollama pull دریافت کنید</h1>
+                <p>فایل zip با ساختار ~/.ollama/models را به سرعت بسازید، دانلودها را مکث/ادامه دهید و هر زمان بخواهید ادامه دهید.</p>
+            </div>
+            <div class="hero__actions">
+                {{if .Message}}<div class="hero__message">{{.Message}}</div>{{end}}
+                {{if .ZipPath}}
+                <a class="hero__download" href="/download/{{.ZipPath}}" download>دانلود بسته آماده</a>
+                {{else}}
+                <span class="hero__download hero__download--disabled">فعلا فایل(zip) آماده نیست</span>
                 {{end}}
-            </ul>
-        </div>
-        {{end}}
-        {{if .PartialSessions}}
-        <div style="margin: 20px 0; background: #f7fafc; border-radius: 10px; padding: 15px; border: 1px solid #e2e8f0;">
-            <h3 style="color: #4a5568; margin-bottom: 12px;">دانلودهای نیمه‌تمام</h3>
-            <ul style="list-style: none; padding: 0; margin: 0;">
-                {{range .PartialSessions}}
-                <li style="padding: 12px 0; border-bottom: 1px solid #e2e8f0;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px;">
-                        <div style="flex: 1; min-width: 0;">
-                            <strong>{{.Model}}</strong>
-                            {{if .Status}}<span style="color: #718096; font-size: 12px; margin-left: 8px;">{{.Status}}</span>{{end}}
-                            <div style="font-size: 12px; color: #718096; margin-top: 4px;">شروع: {{.Started}} · آخرین بروزرسانی: {{.Updated}}</div>
-                        </div>
-                        <form action="/resume" method="post" style="margin: 0;">
-                            <input type="hidden" name="session" value="{{.SessionID}}">
-                            <button type="submit" style="padding: 8px 16px; background: #38a169; border: none; color: white; border-radius: 5px; cursor: pointer;">ادامه دانلود</button>
-                        </form>
+            </div>
+        </header>
+
+        <section class="status-grid">
+            <article class="card card--active">
+                <div class="card__title">
+                    <div>
+                        <h2>در حال دانلود</h2>
+                        <p class="subtitle">وضعیت جلسه فعلی را زیر نظر بگیرید</p>
                     </div>
-                </li>
+                    {{if .RunningSession}}
+                    <span class="badge badge--primary">{{.RunningSession.StateLabel}}</span>
+                    {{else}}
+                    <span class="badge badge--secondary">آماده</span>
+                    {{end}}
+                </div>
+                {{if .RunningSession}}
+                <div class="card__model">{{.RunningSession.Model}}</div>
+                <p class="card__meta">
+                    <span>شروع: {{.RunningSession.Started}}</span>
+                    <span>آخرین بروزرسانی: {{.RunningSession.Updated}}</span>
+                </p>
+                {{if .RunningSession.Message}}<p class="card__note">{{.RunningSession.Message}}</p>{{end}}
+                <div class="card__actions">
+                    <button type="button" onclick="pauseDownload()">وقفه</button>
+                    <button type="button" onclick="cancelDownload()">لغو</button>
+                </div>
+                {{else}}
+                <p class="card__empty">فعلا دانلود فعالی در جریان نیست. کافی است مدل دلخواه را وارد کنید.</p>
+                {{end}}
+                <div id="progressContainer" class="progress-row">
+                    <progress id="progressBar" max="100" value="0"></progress>
+                    <div id="progressText"></div>
+                </div>
+            </article>
+
+            <article class="card card--paused">
+                <div class="card__title">
+                    <h3>مکث‌شده‌ها</h3>
+                    <span class="badge badge--secondary">ادامه دهید</span>
+                </div>
+                {{if .PausedSessions}}
+                <ul class="session-list">
+                    {{range .PausedSessions}}
+                    <li class="session-card">
+                        <strong>{{.Model}}</strong>
+                        <span>{{.StateLabel}} · بروزرسانی: {{.Updated}}</span>
+                        <div class="session-details">
+                            <form action="/resume" method="post">
+                                <input type="hidden" name="session" value="{{.SessionID}}">
+                                <button type="submit">ادامه دانلود</button>
+                            </form>
+                            <span>شروع: {{.Started}}</span>
+                        </div>
+                        {{if .Message}}<p>{{.Message}}</p>{{end}}
+                    </li>
+                    {{end}}
+                </ul>
+                {{else}}
+                <p class="card__empty">هیچ دانلودی در مکث نیست.</p>
+                {{end}}
+            </article>
+
+            <article class="card card--error">
+                <div class="card__title">
+                    <h3>خطاها و شکست‌ها</h3>
+                    <span class="badge badge--error">پیگیری</span>
+                </div>
+                {{if .ErroredSessions}}
+                <ul class="session-list">
+                    {{range .ErroredSessions}}
+                    <li class="session-card">
+                        <strong>{{.Model}}</strong>
+                        <span>{{.StateLabel}} · بروزرسانی: {{.Updated}}</span>
+                        <div class="session-details">
+                            <form action="/resume" method="post">
+                                <input type="hidden" name="session" value="{{.SessionID}}">
+                                <button type="submit">ادامه دانلود</button>
+                            </form>
+                            <span>شروع: {{.Started}}</span>
+                        </div>
+                        {{if .Message}}<p>پیام: {{.Message}}</p>{{end}}
+                    </li>
+                    {{end}}
+                </ul>
+                {{else}}
+                <p class="card__empty">خطایی ثبت نشده است.</p>
+                {{end}}
+            </article>
+        </section>
+
+        <section class="card downloads-card">
+            <div class="card__title">
+                <h2>مدل‌های ذخیره‌شده</h2>
+                <span class="badge badge--secondary">zip</span>
+            </div>
+            <ul>
+                {{range .Downloads}}
+                <li><a href="/download/downloaded-models/{{.}}">{{.}}</a></li>
+                {{else}}
+                <li>هنوز مدلی دانلود نشده است.</li>
                 {{end}}
             </ul>
-        </div>
-        {{end}}
-        <div id="progressContainer" style="display:none; margin: 15px 0;">
-            <progress id="progressBar" max="100" value="0" style="width: 100%; height: 20px;"></progress>
-            <div id="progressText" style="text-align: center; margin-top: 5px;"></div>
-        </div>
-        {{if or (eq .Message "در حال دانلود...") (eq .Message "در حال ادامه دانلود...")}}
-        <div style="text-align: center; margin: 15px 0; display: flex; justify-content: center; gap: 12px; flex-wrap: wrap;">
-            <button onclick="pauseDownload()" style="padding: 10px 20px; background: #f6ad55; color: white; border: none; border-radius: 5px; cursor: pointer;">وقفه</button>
-            <button onclick="cancelDownload()" style="padding: 10px 20px; background: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer;">لغو دانلود</button>
-        </div>
-        {{end}}
-        <form action="/download" method="post">
-            <label for="model">نام مدل</label>
-            <input type="text" id="model" name="model" placeholder="مثال: llama3.2" required>
+        </section>
 
-            <label for="concurrency">همزمانی</label>
-            <input type="number" id="concurrency" name="concurrency" value="4" min="1">
-
-            <label for="retries">تلاش مجدد</label>
-            <input type="number" id="retries" name="retries" value="3" min="0">
-
-            <button type="submit">دانلود مدل</button>
-        </form>
+        <section class="card form-card">
+            <h2>دانلود مدل جدید</h2>
+            <form action="/download" method="post">
+                <div>
+                    <label for="model">نام مدل</label>
+                    <input type="text" id="model" name="model" placeholder="مثال: llama3.2" required>
+                </div>
+                <div>
+                    <label for="concurrency">تعداد همزمانی</label>
+                    <input type="number" id="concurrency" name="concurrency" value="4" min="1">
+                </div>
+                <div>
+                    <label for="retries">تعداد تلاش مجدد</label>
+                    <input type="number" id="retries" name="retries" value="3" min="0">
+                </div>
+                <button type="submit">شروع دانلود</button>
+            </form>
+        </section>
     </div>
+
     <script>
         function cancelDownload() {
             fetch('/cancel', { method: 'POST' })
@@ -173,7 +475,7 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.total > 0) {
-                        document.getElementById('progressContainer').style.display = 'block';
+                        document.getElementById('progressContainer').style.display = 'flex';
                         document.getElementById('progressBar').value = data.percent;
                         document.getElementById('progressText').innerText = `${formatBytes(data.done)} / ${formatBytes(data.total)} (${data.percent}%)`;
                     } else {
