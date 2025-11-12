@@ -3,8 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@200;400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <title>ابزار دانلود مدل Ollama</title>
+    <style>
+        body {
+            font-family: 'Vazirmatn', 'Segoe UI', sans-serif;
+        }
+    </style>
 </head>
 <body class="min-h-screen bg-slate-950 text-slate-50">
     <div class="flex min-h-screen items-center justify-center px-4 py-10">
@@ -70,8 +76,8 @@
                             </div>
                             {{if .RunningSession}}
                             <div class="mt-6 flex flex-wrap gap-3">
-                                <button onclick="pauseDownload()" class="flex-1 rounded-full border border-amber-400 bg-amber-500/20 px-4 py-2 text-sm font-semibold text-amber-200 transition hover:bg-amber-500/40">وقفه</button>
-                                <button onclick="cancelDownload()" class="flex-1 rounded-full border border-rose-500 bg-rose-500/20 px-4 py-2 text-sm font-semibold text-rose-200 transition hover:bg-rose-500/40">لغو</button>
+                                <button onclick="pauseDownload()" class="flex-1 rounded-full border border-amber-400 bg-amber-500/20 px-4 py-2 text-sm font-semibold text-amber-200 transition hover:bg-amber-500/40 disabled:border-slate-600 disabled:text-slate-500 disabled:bg-slate-800 disabled:hover:bg-slate-800" {{if not .RunningSession}}disabled{{end}}>وقفه</button>
+                                <button onclick="cancelDownload()" class="flex-1 rounded-full border border-rose-500 bg-rose-500/20 px-4 py-2 text-sm font-semibold text-rose-200 transition hover:bg-rose-500/40 disabled:border-slate-600 disabled:text-slate-500 disabled:bg-slate-800 disabled:hover:bg-slate-800" {{if not .RunningSession}}disabled{{end}}>لغو</button>
                             </div>
                             {{end}}
                         </article>
