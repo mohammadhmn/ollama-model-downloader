@@ -34,8 +34,9 @@ import (
 var templateFS embed.FS
 
 const (
-	defaultRegistry = "https://registry.ollama.ai"
-	defaultWebPort  = 8080
+	defaultRegistry  = "https://registry.ollama.ai"
+	defaultWebPort   = 8080
+	downloadsDirName = "downloaded-models"
 )
 
 var currentZip string
@@ -48,10 +49,17 @@ var currentSessionDir string
 type PageData struct {
 	Message         string
 	ZipPath         string
-	Downloads       []string
+	Downloads       []downloadEntry
 	RunningSession  *partialSessionView
 	PausedSessions  []partialSessionView
 	ErroredSessions []partialSessionView
+}
+
+type downloadEntry struct {
+	Name    string
+	Model   string
+	Path    string
+	ModTime time.Time
 }
 
 type sessionMeta struct {
@@ -145,6 +153,33 @@ func categorizeSessions(metas []sessionMeta) (running *partialSessionView, pause
 		}
 	}
 	return
+}
+
+func downloadsFromDir(dir string) []downloadEntry {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var downloads []downloadEntry
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".zip") {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		downloads = append(downloads, downloadEntry{
+			Name:    entry.Name(),
+			Model:   strings.TrimSuffix(entry.Name(), ".zip"),
+			Path:    filepath.Join(dir, entry.Name()),
+			ModTime: info.ModTime(),
+		})
+	}
+	sort.Slice(downloads, func(i, j int) bool {
+		return downloads[i].ModTime.After(downloads[j].ModTime)
+	})
+	return downloads
 }
 
 func sessionViewFromMeta(meta sessionMeta) partialSessionView {
@@ -1300,13 +1335,7 @@ func startWebServer(port int) {
 			}
 		}
 		// List downloaded models
-		if entries, err := os.ReadDir(downloadsDir); err == nil {
-			for _, entry := range entries {
-				if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".zip") {
-					data.Downloads = append(data.Downloads, entry.Name())
-				}
-			}
-		}
+		data.Downloads = downloadsFromDir(downloadsDir)
 		if sessions, err := discoverPartialSessions(downloadsDir); err == nil {
 			running, paused, errored := categorizeSessions(sessions)
 			data.RunningSession = running
@@ -1364,6 +1393,8 @@ func startWebServer(port int) {
 
 		http.Redirect(w, r, "/", http.StatusFound)
 	})
+
+	http.HandleFunc("/model/action", modelActionHandler(downloadsDir))
 
 	http.HandleFunc("/resume", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -1511,6 +1542,141 @@ func startWebServer(port int) {
 	url := fmt.Sprintf("http://localhost:%d", actualPort)
 	openBrowser(url)
 	select {}
+}
+
+func modelActionHandler(downloadsDir string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Bad request", http.StatusBadRequest)
+			return
+		}
+		name := r.FormValue("name")
+		action := r.FormValue("action")
+		if name == "" || action == "" {
+			http.Error(w, "Missing parameters", http.StatusBadRequest)
+			return
+		}
+		target := filepath.Join(downloadsDir, name)
+		var msg string
+		var err error
+		switch action {
+		case "delete":
+			err = os.Remove(target)
+			if err == nil {
+				staging := filepath.Join(downloadsDir, strings.TrimSuffix(name, ".zip")+".staging")
+				_ = os.RemoveAll(staging)
+				msg = fmt.Sprintf("%s حذف شد.", name)
+			}
+		case "open-folder":
+			err = openExplorer(downloadsDir)
+			if err == nil {
+				msg = "پوشه دانلود باز شد."
+			}
+		case "unzip":
+			dest, derr := ollamaModelsDir()
+			if derr != nil {
+				err = derr
+				break
+			}
+			err = unzipToDir(target, dest)
+			if err == nil {
+				msg = fmt.Sprintf("%s به %s استخراج شد.", name, dest)
+			}
+		default:
+			err = fmt.Errorf("عمل نامعتبر: %s", action)
+		}
+		if err != nil {
+			currentMessage = fmt.Sprintf("خطا: %s", err)
+		} else if msg != "" {
+			currentMessage = msg
+		}
+		http.Redirect(w, r, "/", http.StatusFound)
+	}
+}
+
+func openExplorer(path string) error {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", path)
+	case "linux":
+		cmd = exec.Command("xdg-open", path)
+	case "windows":
+		cmd = exec.Command("cmd", "/c", "start", "", path)
+	default:
+		return fmt.Errorf("unsupported OS")
+	}
+	return cmd.Start()
+}
+
+func ollamaModelsDir() (string, error) {
+	if dir := os.Getenv("OLLAMA_MODELS_DIR"); dir != "" {
+		return dir, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	switch runtime.GOOS {
+	case "windows":
+		if local := os.Getenv("LOCALAPPDATA"); local != "" {
+			return filepath.Join(local, "Ollama", "models"), nil
+		}
+		return filepath.Join(home, "AppData", "Local", "Ollama", "models"), nil
+	default:
+		return filepath.Join(home, ".ollama", "models"), nil
+	}
+}
+
+func unzipToDir(zipPath, dest string) error {
+	r, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+
+	destClean := filepath.Clean(dest)
+	if err := os.MkdirAll(destClean, 0o755); err != nil {
+		return err
+	}
+
+	for _, f := range r.File {
+		if f.FileInfo().IsDir() {
+			targetDir := filepath.Join(destClean, filepath.FromSlash(f.Name))
+			if err := os.MkdirAll(targetDir, f.Mode()); err != nil {
+				return err
+			}
+			continue
+		}
+		targetPath := filepath.Join(destClean, filepath.FromSlash(f.Name))
+		if !strings.HasPrefix(filepath.Clean(targetPath), destClean+string(os.PathSeparator)) && filepath.Clean(targetPath) != destClean {
+			return fmt.Errorf("invalid file path: %s", f.Name)
+		}
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+			return err
+		}
+		out, err := os.OpenFile(targetPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, f.Mode())
+		if err != nil {
+			return err
+		}
+		rc, err := f.Open()
+		if err != nil {
+			out.Close()
+			return err
+		}
+		if _, err := io.Copy(out, rc); err != nil {
+			rc.Close()
+			out.Close()
+			return err
+		}
+		rc.Close()
+		out.Close()
+	}
+	return nil
 }
 
 func openBrowser(url string) {
