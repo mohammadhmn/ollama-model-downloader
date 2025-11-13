@@ -348,7 +348,7 @@ func run(ctx context.Context, opt options) error {
 	} else {
 		p = newProgress(total)
 		if total > 0 {
-			p.Start()
+			p.Start(ctx)
 			defer func() {
 				p.Stop()
 				fmt.Fprintln(os.Stderr) // newline after progress
@@ -825,7 +825,7 @@ func (p *progress) SetDone(n int64) {
 	atomic.StoreInt64(&p.done, n)
 }
 
-func (p *progress) Start() {
+func (p *progress) Start(ctx context.Context) {
 	if p == nil || p.total <= 0 {
 		return
 	}
@@ -840,6 +840,9 @@ func (p *progress) Start() {
 					p.tick.Stop()
 				}
 				p.render()
+				return
+			case <-ctx.Done():
+				p.Stop()
 				return
 			}
 		}
