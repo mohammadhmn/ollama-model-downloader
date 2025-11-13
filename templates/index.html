@@ -10,217 +10,477 @@
         body {
             font-family: 'Vazirmatn', 'Segoe UI', sans-serif;
         }
+        .status-indicator {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+        .compact-card {
+            transition: all 0.2s ease;
+            border: 1px solid rgba(71, 85, 105, 0.5);
+        }
+        .compact-card:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            border-color: rgba(56, 189, 248, 0.3);
+        }
+        .progress-ring {
+            transform: rotate(-90deg);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .status-dot.active { background-color: rgb(34, 197, 94); }
+        .status-dot.paused { background-color: rgb(251, 191, 36); }
+        .status-dot.error { background-color: rgb(239, 68, 68); }
+        .model-card {
+            position: relative;
+            overflow: hidden;
+        }
+        .model-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.5), transparent);
+            transform: translateX(-100%);
+            transition: transform 0.6s ease;
+        }
+        .model-card:hover::before {
+            transform: translateX(100%);
+        }
+        .action-button {
+            transition: all 0.15s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .action-button::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            transform: translate(-50%, -50%);
+            transition: width 0.3s, height 0.3s;
+        }
+        .action-button:active::after {
+            width: 100px;
+            height: 100px;
+        }
+        .sidebar-section {
+            border-left: 3px solid transparent;
+            transition: border-color 0.2s ease;
+        }
+        .sidebar-section:hover {
+            border-left-color: rgba(56, 189, 248, 0.5);
+        }
+        .header-icon {
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+        }
+        .empty-state {
+            background: linear-gradient(135deg, rgba(71, 85, 105, 0.1) 0%, rgba(51, 65, 85, 0.1) 100%);
+        }
     </style>
 </head>
 <body class="min-h-screen bg-slate-950 text-slate-50">
-    <div class="flex min-h-screen items-center justify-center px-4 py-10">
-        <div class="w-full max-w-6xl rounded-2xl border border-slate-700/60 bg-slate-900/70 shadow-2xl backdrop-blur-lg">
-            <div class="flex flex-col lg:flex-row">
-                <aside class="w-full lg:w-60 border-b border-slate-800 lg:border-b-0 lg:border-r border-dashed border-slate-800/80 bg-slate-900/40 p-6 space-y-6">
+    <!-- Header Bar -->
+    <header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur-sm">
+        <div class="flex items-center justify-between px-4 py-2">
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <div class="h-8 w-8 rounded-lg bg-sky-500 flex items-center justify-center">
+                        <svg class="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"></path>
+                        </svg>
+                    </div>
                     <div>
-                        <h2 class="text-sm font-semibold uppercase tracking-[0.3em] text-slate-400">وضعیت ابزار</h2>
-                        <p class="mt-2 text-xs text-slate-400 leading-relaxed">تمام اتفاقات اینجا ثبت می‌شوند.</p>
+                        <h1 class="text-lg font-bold text-white">دانلودر مدل Ollama</h1>
+                        <p class="text-xs text-slate-400">مدیریت دانلود مدل‌ها</p>
                     </div>
-                    <div class="space-y-4">
-                        <div class="rounded-xl border border-slate-800 bg-slate-950/80 p-4">
-                            <p class="text-[0.7rem] text-slate-400">دانلودهای کامل‌شده</p>
-                            <p class="text-2xl font-semibold text-emerald-400">{{len .Downloads}}</p>
-                        </div>
-                        <div class="rounded-xl border border-slate-800 bg-slate-950/80 p-4">
-                            <p class="text-[0.7rem] text-slate-400">حالت جاری</p>
-                            {{if .RunningSession}}
-                            <p class="text-lg font-semibold text-sky-300">{{.RunningSession.StateLabel}}</p>
-                            {{else}}
-                            <p class="text-lg font-semibold text-slate-400">آماده به کار</p>
-                            {{end}}
-                        </div>
-                        <div class="rounded-xl border border-slate-800 bg-slate-950/80 p-4">
-                            <p class="text-[0.7rem] text-slate-400">مکث</p>
-                            <p class="text-lg font-semibold text-amber-300">{{len .PausedSessions}}</p>
-                        </div>
-                        <div class="rounded-xl border border-slate-800 bg-slate-950/80 p-4">
-                            <p class="text-[0.7rem] text-slate-400">خطا</p>
-                            <p class="text-lg font-semibold text-rose-400">{{len .ErroredSessions}}</p>
-                        </div>
-                    </div>
-                </aside>
+                </div>
+            </div>
+            
+            <!-- Status Bar -->
+            <div class="flex items-center gap-6 text-xs">
+                <div class="flex items-center gap-2 px-2 py-1 rounded-md bg-slate-800/50">
+                    <span class="status-dot active"></span>
+                    <span class="text-slate-300 font-medium">{{len .Downloads}} کامل</span>
+                </div>
+                {{if .RunningSession}}
+                <div class="flex items-center gap-2 px-2 py-1 rounded-md bg-slate-800/50">
+                    <span class="status-dot active status-indicator"></span>
+                    <span class="text-slate-300 font-medium">{{.RunningSession.StateLabel}}</span>
+                </div>
+                {{end}}
+                {{if .PausedSessions}}
+                <div class="flex items-center gap-2 px-2 py-1 rounded-md bg-slate-800/50">
+                    <span class="status-dot paused"></span>
+                    <span class="text-slate-300 font-medium">{{len .PausedSessions}} مکث</span>
+                </div>
+                {{end}}
+                {{if .ErroredSessions}}
+                <div class="flex items-center gap-2 px-2 py-1 rounded-md bg-slate-800/50">
+                    <span class="status-dot error"></span>
+                    <span class="text-slate-300 font-medium">{{len .ErroredSessions}} خطا</span>
+                </div>
+                {{end}}
 
-                <main class="flex-1 px-6 py-6 lg:py-8 space-y-6">
-                    <header class="flex flex-col gap-4">
-                        <div>
-                            <p class="text-xs uppercase tracking-[0.4em] text-slate-500">Ollama Model Downloader</p>
-                            <h1 class="text-3xl font-bold text-white sm:text-4xl">ابزار دانلود مدل</h1>
-                        </div>
-                        {{if .Message}}
-                        <div class="rounded-xl border border-slate-800 bg-slate-800/80 px-4 py-3 text-sm text-slate-200">{{.Message}}</div>
-                        {{end}}
-                    </header>
-
-                    <section class="grid gap-6 lg:grid-cols-2">
-                        <article class="rounded-2xl border border-slate-800/60 bg-gradient-to-br from-slate-900/90 to-slate-900/40 p-5 shadow-inner">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <p class="text-xs uppercase tracking-[0.3em] text-slate-400">دانلود فعال</p>
-                                    {{if .RunningSession}}
-                                    <h2 class="mt-2 text-xl font-semibold text-white">{{.RunningSession.Model}}</h2>
-                                    <p class="text-sm text-slate-400">{{.RunningSession.StateLabel}} · بروزرسانی {{.RunningSession.Updated}}</p>
-                                    {{else}}
-                                    <h2 class="mt-2 text-xl font-semibold text-slate-300">هیچ دانلود فعالی نیست</h2>
-                                    {{end}}
-                                </div>
-                                <span class="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-400">{{if .RunningSession}}{{.RunningSession.StateLabel}}{{else}}منتظر{{end}}</span>
-                            </div>
-                            <div id="progressContainer" class="mt-6 hidden flex-col gap-2">
-                                <progress id="progressBar" max="100" value="0" class="w-full h-3 rounded-full bg-slate-800"></progress>
-                                <p id="progressText" class="text-xs text-slate-400"></p>
-                            </div>
-                            {{if .RunningSession}}
-                            <div class="mt-6 flex flex-wrap gap-3">
-                                <button onclick="pauseDownload()" class="flex-1 rounded-full border border-amber-400 bg-amber-500/20 px-4 py-2 text-sm font-semibold text-amber-200 transition hover:bg-amber-500/40 disabled:border-slate-600 disabled:text-slate-500 disabled:bg-slate-800 disabled:hover:bg-slate-800" {{if not .RunningSession}}disabled{{end}}>وقفه</button>
-                                <button onclick="cancelDownload()" class="flex-1 rounded-full border border-rose-500 bg-rose-500/20 px-4 py-2 text-sm font-semibold text-rose-200 transition hover:bg-rose-500/40 disabled:border-slate-600 disabled:text-slate-500 disabled:bg-slate-800 disabled:hover:bg-slate-800" {{if not .RunningSession}}disabled{{end}}>لغو</button>
-                            </div>
-                            {{end}}
-                        </article>
-
-                        <article class="rounded-2xl border border-slate-800/60 bg-slate-900/60 p-5 shadow-lg">
-                            <h3 class="text-sm uppercase tracking-[0.3em] text-slate-400">لیست دانلود</h3>
-                            <div class="mt-3 space-y-3">
-                                {{range .Downloads}}
-                                <div class="space-y-2 rounded-xl border border-slate-800/60 bg-slate-950/60 px-4 py-3 text-sm">
-                                    <div class="flex items-center justify-between gap-3">
-                                        <span class="text-sm font-semibold text-slate-50">{{.Model}}</span>
-                                        <span class="text-xs text-slate-400">{{.Name}}</span>
-                                    </div>
-                                    <div class="flex flex-wrap gap-2 text-[0.65rem]">
-                                        <button type="button" onclick="modelAction('unzip', {{js .Name}})" class="rounded-full border border-emerald-500 px-3 py-1 font-semibold text-emerald-300 transition hover:bg-emerald-500/10">استخراج</button>
-                                        <button type="button" onclick="modelAction('open-folder', {{js .Name}})" class="rounded-full border border-sky-500 px-3 py-1 font-semibold text-sky-200 transition hover:bg-sky-500/10">باز کردن پوشه</button>
-                                        <button type="button" onclick="modelAction('delete', {{js .Name}})" class="rounded-full border border-rose-500 px-3 py-1 font-semibold text-rose-200 transition hover:bg-rose-500/10">حذف</button>
-                                        <a href="https://ollama.com/library/{{urlquery .Model}}" target="_blank" rel="noopener" class="rounded-full border border-slate-600 px-3 py-1 font-semibold text-slate-300 transition hover:bg-slate-700/60">کتابخانه</a>
-                                    </div>
-                                </div>
-                                {{else}}
-                                <p class="text-xs text-slate-500">هیچ مدل دانلودی هنوز آماده نشده است.</p>
-                                {{end}}
-                            </div>
-                        </article>
-                    </section>
-
-                    <section class="grid gap-6 lg:grid-cols-3">
-                        <article class="rounded-2xl border border-slate-800/60 bg-slate-900/60 p-5 shadow-lg">
-                            <div class="flex items-center justify-between">
-                                <h4 class="text-sm font-semibold">در انتظار ادامه</h4>
-                                <span class="text-xs text-slate-400">{{len .PausedSessions}}</span>
-                            </div>
-                            <ul class="mt-4 space-y-3">
-                                {{range .PausedSessions}}
-                                <li class="session-card rounded-xl border border-slate-800/60 bg-slate-950/60 p-4">
-                                    <div class="flex items-center justify-between">
-                                        <strong class="text-sm">{{.Model}}</strong>
-                                        <span class="text-[0.65rem] uppercase tracking-[0.3em] text-amber-300">{{.StateLabel}}</span>
-                                    </div>
-                                    <div class="mt-2 flex items-center justify-between text-xs text-slate-400">
-                                        <span>شروع {{.Started}}</span>
-                                        <span>بروزرسانی {{.Updated}}</span>
-                                    </div>
-                                    {{if .Message}}<p class="mt-2 text-[0.7rem] text-slate-500">{{.Message}}</p>{{end}}
-                                    <form action="/resume" method="post" class="mt-3">
-                                        <input type="hidden" name="session" value="{{.SessionID}}">
-                                        <button type="submit" class="w-full rounded-full bg-sky-600/90 px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-sky-500/90">ادامه</button>
-                                    </form>
-                                </li>
-                                {{else}}
-                                <li class="text-xs text-slate-500">فعلاً هیچ موردی مکث نشده.</li>
-                                {{end}}
-                            </ul>
-                        </article>
-
-                        <article class="rounded-2xl border border-slate-800/60 bg-slate-900/60 p-5 shadow-lg">
-                            <div class="flex items-center justify-between">
-                                <h4 class="text-sm font-semibold">خطاها</h4>
-                                <span class="text-xs text-red-400">{{len .ErroredSessions}}</span>
-                            </div>
-                            <ul class="mt-4 space-y-3">
-                                {{range .ErroredSessions}}
-                                <li class="session-card rounded-xl border border-rose-800/60 bg-rose-900/40 p-4">
-                                    <div class="flex items-center justify-between">
-                                        <strong class="text-sm text-white">{{.Model}}</strong>
-                                        <span class="text-[0.6rem] uppercase tracking-[0.3em] text-rose-300">{{.StateLabel}}</span>
-                                    </div>
-                                    <div class="mt-2 text-xs text-slate-200">
-                                        {{if .Message}}خطا: {{.Message}} · {{end}}بروزرسانی {{.Updated}}
-                                    </div>
-                                    <form action="/resume" method="post" class="mt-3">
-                                        <input type="hidden" name="session" value="{{.SessionID}}">
-                                        <button type="submit" class="w-full rounded-full bg-rose-600/90 px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-rose-500/90">تلاش مجدد</button>
-                                    </form>
-                                </li>
-                                {{else}}
-                                <li class="text-xs text-slate-500">هیچ خطایی رخ نداده.</li>
-                                {{end}}
-                            </ul>
-                        </article>
-
-                        <article class="rounded-2xl border border-slate-800/60 bg-slate-900/60 p-5 shadow-lg form-card">
-                            <h4 class="text-sm font-semibold">شروع دانلود جدید</h4>
-                            <form action="/download" method="post" class="mt-4 space-y-4">
-                                <div>
-                                    <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-slate-400" for="model">نام مدل</label>
-                                    <input class="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2 text-sm text-slate-100 focus:border-sky-500 focus:outline-none" id="model" name="model" placeholder="مثال: llama3.2" required>
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-slate-400" for="concurrency">همزمانی</label>
-                                    <input class="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2 text-sm text-slate-100 focus:border-sky-500 focus:outline-none" id="concurrency" name="concurrency" type="number" min="1" value="4">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-slate-400" for="retries">تلاش مجدد</label>
-                                    <input class="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2 text-sm text-slate-100 focus:border-sky-500 focus:outline-none" id="retries" name="retries" type="number" min="0" value="3">
-                                </div>
-                                <button class="w-full rounded-2xl bg-sky-500 px-4 py-3 text-sm font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-sky-400" type="submit">شروع دانلود</button>
-                            </form>
-                        </article>
-                    </section>
-                </main>
             </div>
         </div>
+    </header>
+
+    <!-- Message Bar -->
+    {{if .Message}}
+    <div class="border-b border-slate-800 bg-slate-800/50 px-4 py-2">
+        <div class="flex items-center justify-between">
+            <p class="text-sm text-slate-200">{{.Message}}</p>
+            <button onclick="this.parentElement.parentElement.style.display='none'" class="text-slate-400 hover:text-slate-200">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
     </div>
+    {{end}}
+
+    <!-- Main Content -->
+    <main class="flex h-[calc(100vh-120px)]">
+        <!-- Sidebar -->
+        <aside class="w-80 border-l border-slate-800 bg-slate-900/50 overflow-y-auto hidden lg:block flex-shrink-0">
+            <div class="p-4 space-y-4">
+                <!-- Quick Actions -->
+                <div class="compact-card sidebar-section rounded-lg border border-slate-800 bg-slate-950/60 p-4">
+                    <h3 class="text-sm font-semibold text-white mb-3">شروع دانلود جدید</h3>
+                    <form action="/download" method="post" class="space-y-3">
+                        <div class="relative">
+                            <input class="w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 pr-8 text-sm text-white placeholder-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500" 
+                                   id="quickModel" name="model" placeholder="نام مدل (مثال: llama3.2)" required>
+                            <svg class="absolute right-2 top-2.5 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                            </svg>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div class="relative">
+                                <input class="w-full rounded-md border border-slate-700 bg-slate-800/50 px-2 py-1.5 pr-6 text-xs text-white placeholder-slate-400 focus:border-sky-500 focus:outline-none" 
+                                       name="concurrency" type="number" min="1" value="4" placeholder="همزمانی">
+                                <span class="absolute right-1.5 top-1.5 text-xs text-slate-500">⚡</span>
+                            </div>
+                            <div class="relative">
+                                <input class="w-full rounded-md border border-slate-700 bg-slate-800/50 px-2 py-1.5 pr-6 text-xs text-white placeholder-slate-400 focus:border-sky-500 focus:outline-none" 
+                                       name="retries" type="number" min="0" value="3" placeholder="تلاش مجدد">
+                                <span class="absolute right-1.5 top-1.5 text-xs text-slate-500">🔄</span>
+                            </div>
+                        </div>
+                        <button type="submit" class="action-button w-full rounded-md bg-gradient-to-r from-sky-500 to-sky-600 px-3 py-2 text-sm font-semibold text-white transition hover:from-sky-400 hover:to-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-slate-900">
+                            <span class="flex items-center justify-center gap-2">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                                </svg>
+                                شروع دانلود
+                            </span>
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Active Download -->
+                {{if .RunningSession}}
+                <div class="compact-card sidebar-section rounded-lg border border-slate-800 bg-gradient-to-br from-slate-900/90 to-slate-800/50 p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center gap-2">
+                            <div class="h-2 w-2 rounded-full bg-sky-400 status-indicator"></div>
+                            <h3 class="text-sm font-semibold text-white">دانلود فعال</h3>
+                        </div>
+                        <span class="rounded-full bg-sky-500/20 px-2 py-1 text-xs text-sky-300 font-medium">{{.RunningSession.StateLabel}}</span>
+                    </div>
+                    <div class="space-y-3">
+                        <div>
+                            <p class="text-sm font-medium text-white">{{.RunningSession.Model}}</p>
+                            <p class="text-xs text-slate-400">آخرین بروزرسانی: {{.RunningSession.Updated}}</p>
+                        </div>
+                        <div id="progressContainer" class="hidden">
+                            <div class="relative">
+                                <div class="flex mb-2 items-center justify-between">
+                                    <div>
+                                        <span id="progressText" class="text-xs font-semibold text-slate-300"></span>
+                                    </div>
+                                    <div class="text-left">
+                                        <span id="progressPercent" class="text-xs font-bold text-sky-300"></span>
+                                    </div>
+                                </div>
+                                <div class="w-full bg-slate-700 rounded-full h-2.5">
+                                    <div id="progressBar" class="bg-gradient-to-r from-sky-500 to-sky-400 h-2.5 rounded-full transition-all duration-300 ease-out" style="width:0%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="pauseDownload()" class="action-button flex-1 rounded-md border border-amber-500/50 bg-amber-500/10 px-2 py-1.5 text-xs font-semibold text-amber-300 transition hover:bg-amber-500/20 focus:outline-none focus:ring-1 focus:ring-amber-500">
+                                ⏸ وقفه
+                            </button>
+                            <button onclick="cancelDownload()" class="action-button flex-1 rounded-md border border-rose-500/50 bg-rose-500/10 px-2 py-1.5 text-xs font-semibold text-rose-300 transition hover:bg-rose-500/20 focus:outline-none focus:ring-1 focus:ring-rose-500">
+                                ✕ لغو
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {{end}}
+
+                <!-- Paused Sessions -->
+                {{if .PausedSessions}}
+                <div class="compact-card rounded-lg border border-slate-800 bg-slate-950/60 p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-semibold text-amber-300">دانلودهای متوقف</h3>
+                        <span class="text-xs text-slate-400">{{len .PausedSessions}}</span>
+                    </div>
+                    <div class="space-y-2">
+                        {{range .PausedSessions}}
+                        <div class="rounded-md border border-slate-700 bg-slate-800/30 p-2">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-medium text-white">{{.Model}}</span>
+                                <form action="/resume" method="post" class="inline">
+                                    <input type="hidden" name="session" value="{{.SessionID}}">
+                                    <button type="submit" class="rounded bg-sky-500 px-2 py-1 text-xs text-white hover:bg-sky-400">ادامه</button>
+                                </form>
+                            </div>
+                        </div>
+                        {{end}}
+                    </div>
+                </div>
+                {{end}}
+
+                <!-- Error Sessions -->
+                {{if .ErroredSessions}}
+                <div class="compact-card rounded-lg border border-rose-800/30 bg-rose-900/20 p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-semibold text-rose-300">خطاها</h3>
+                        <span class="text-xs text-rose-400">{{len .ErroredSessions}}</span>
+                    </div>
+                    <div class="space-y-2">
+                        {{range .ErroredSessions}}
+                        <div class="rounded-md border border-rose-700/30 bg-rose-900/30 p-2">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-medium text-white">{{.Model}}</span>
+                                <form action="/resume" method="post" class="inline">
+                                    <input type="hidden" name="session" value="{{.SessionID}}">
+                                    <button type="submit" class="rounded bg-rose-500 px-2 py-1 text-xs text-white hover:bg-rose-400">تلاش مجدد</button>
+                                </form>
+                            </div>
+                            {{if .Message}}<p class="text-xs text-rose-200 mt-1">{{.Message}}</p>{{end}}
+                        </div>
+                        {{end}}
+                    </div>
+                </div>
+                {{end}}
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <div class="flex-1 overflow-y-auto min-w-0">
+            <!-- Mobile Quick Actions -->
+            <div class="lg:hidden p-4 border-b border-slate-800">
+                <div class="compact-card rounded-lg border border-slate-800 bg-slate-950/60 p-4">
+                    <h3 class="text-sm font-semibold text-white mb-3">شروع دانلود جدید</h3>
+                    <form action="/download" method="post" class="space-y-3">
+                        <div class="relative">
+                            <input class="w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 pr-8 text-sm text-white placeholder-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500" 
+                                   id="quickModel" name="model" placeholder="نام مدل (مثال: llama3.2)" required>
+                            <svg class="absolute right-2 top-2.5 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                            </svg>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div class="relative">
+                                <input class="w-full rounded-md border border-slate-700 bg-slate-800/50 px-2 py-1.5 pr-6 text-xs text-white placeholder-slate-400 focus:border-sky-500 focus:outline-none" 
+                                       name="concurrency" type="number" min="1" value="4" placeholder="همزمانی">
+                                <span class="absolute right-1.5 top-1.5 text-xs text-slate-500">⚡</span>
+                            </div>
+                            <div class="relative">
+                                <input class="w-full rounded-md border border-slate-700 bg-slate-800/50 px-2 py-1.5 pr-6 text-xs text-white placeholder-slate-400 focus:border-sky-500 focus:outline-none" 
+                                       name="retries" type="number" min="0" value="3" placeholder="تلاش مجدد">
+                                <span class="absolute right-1.5 top-1.5 text-xs text-slate-500">🔄</span>
+                            </div>
+                        </div>
+                        <button type="submit" class="action-button w-full rounded-md bg-gradient-to-r from-sky-500 to-sky-600 px-3 py-2 text-sm font-semibold text-white transition hover:from-sky-400 hover:to-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-slate-900">
+                            <span class="flex items-center justify-center gap-2">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                                </svg>
+                                شروع دانلود
+                            </span>
+                        </button>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="p-4 lg:p-6">
+                <!-- Downloads Grid -->
+                <div class="mb-6">
+                    <h2 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                        <svg class="h-5 w-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        مدل‌های دانلود شده
+                        <span class="text-sm text-slate-400">({{len .Downloads}})</span>
+                    </h2>
+                    
+                    {{if .Downloads}}
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                        {{range .Downloads}}
+                        <div class="model-card compact-card rounded-lg border border-slate-800 bg-slate-900/60 p-4 hover:border-sky-500/30">
+                            <div class="flex items-start justify-between mb-3">
+                                <div class="flex-1 min-w-0">
+                                    <h4 class="text-sm font-semibold text-white truncate">{{.Model}}</h4>
+                                    <p class="text-xs text-slate-400 mt-1 truncate">{{.Name}}</p>
+                                </div>
+                                <div class="h-8 w-8 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0 ml-2">
+                                    <svg class="h-4 w-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap gap-1.5">
+                                <button onclick="modelAction('unzip', {{js .Name}})" class="action-button rounded border border-emerald-500/50 bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-300 transition hover:bg-emerald-500/20 hover:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                                    📦 استخراج
+                                </button>
+                                <button onclick="modelAction('open-folder', {{js .Name}})" class="action-button rounded border border-sky-500/50 bg-sky-500/10 px-2 py-1 text-xs font-medium text-sky-300 transition hover:bg-sky-500/20 hover:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-500">
+                                    📁 پوشه
+                                </button>
+                                <button onclick="modelAction('delete', {{js .Name}})" class="action-button rounded border border-rose-500/50 bg-rose-500/10 px-2 py-1 text-xs font-medium text-rose-300 transition hover:bg-rose-500/20 hover:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-500">
+                                    🗑️ حذف
+                                </button>
+                                <a href="https://ollama.com/library/{{urlquery .Model}}" target="_blank" rel="noopener" class="action-button inline-flex items-center rounded border border-slate-600/50 bg-slate-700/10 px-2 py-1 text-xs font-medium text-slate-300 transition hover:bg-slate-700/20 hover:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500">
+                                    🔗 مشاهده
+                                </a>
+                            </div>
+                        </div>
+                        {{end}}
+                    </div>
+                    {{else}}
+                    <div class="text-center py-12">
+                        <div class="mx-auto h-16 w-16 rounded-full bg-slate-800/50 flex items-center justify-center mb-4">
+                            <svg class="h-8 w-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-lg font-medium text-white mb-2">هنوز مدلی دانلود نشده</h3>
+                        <p class="text-sm text-slate-400">از فرم کناری برای شروع دانلود استفاده کنید</p>
+                    </div>
+                    {{end}}
+                </div>
+            </div>
+        </div>
+    </main>
 
     <script>
+
+
+        // Auto-refresh progress
+        let progressInterval;
+        
+        function startProgressPolling() {
+            progressInterval = setInterval(() => {
+                fetch('/progress')
+                    .then(response => response.json())
+                    .then(data => {
+                        updateProgress(data);
+                    })
+                    .catch(err => console.log('Progress fetch error:', err));
+            }, 1000);
+        }
+
+        function updateProgress(data) {
+            const container = document.getElementById('progressContainer');
+            const bar = document.getElementById('progressBar');
+            const text = document.getElementById('progressText');
+            const percent = document.getElementById('progressPercent');
+            
+            if (data.total > 0) {
+                container.style.display = 'block';
+                bar.style.width = data.percent + '%';
+                text.innerText = formatBytes(data.done) + ' / ' + formatBytes(data.total);
+                percent.innerText = data.percent + '%';
+            } else {
+                container.style.display = 'none';
+            }
+        }
+
         function cancelDownload() {
             fetch('/cancel', { method: 'POST' })
-                .then(() => location.reload())
-                .catch(err => console.log('Cancel error:', err));
+                .then(() => {
+                    showNotification('دانلود لغو شد', 'warning');
+                    setTimeout(() => location.reload(), 1000);
+                })
+                .catch(err => {
+                    console.log('Cancel error:', err);
+                    showNotification('خطا در لغو دانلود', 'error');
+                });
         }
 
         function pauseDownload() {
             fetch('/pause', { method: 'POST' })
-                .then(() => location.reload())
-                .catch(err => console.log('Pause error:', err));
+                .then(() => {
+                    showNotification('دانلود متوقف شد', 'info');
+                    setTimeout(() => location.reload(), 1000);
+                })
+                .catch(err => {
+                    console.log('Pause error:', err);
+                    showNotification('خطا در توقف دانلود', 'error');
+                });
         }
 
         function modelAction(action, name) {
+            const actionMessages = {
+                'unzip': 'در حال استخراج...',
+                'open-folder': 'در حال باز کردن پوشه...',
+                'delete': 'در حال حذف...'
+            };
+            
+            showNotification(actionMessages[action] || 'در حال انجام عمل...', 'info');
+            
             fetch('/model/action', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: new URLSearchParams({ action, name })
             })
-                .then(() => location.reload())
-                .catch(err => console.log('Model action error:', err));
+                .then(() => {
+                    showNotification('عملیات با موفقیت انجام شد', 'success');
+                    setTimeout(() => location.reload(), 1000);
+                })
+                .catch(err => {
+                    console.log('Model action error:', err);
+                    showNotification('خطا در انجام عملیات', 'error');
+                });
         }
 
-        setInterval(() => {
-            fetch('/progress')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.total > 0) {
-                        document.getElementById('progressContainer').style.display = 'flex';
-                        document.getElementById('progressBar').value = data.percent;
-                        document.getElementById('progressText').innerText = `${formatBytes(data.done)} / ${formatBytes(data.total)} (${data.percent}%)`;
-                    } else {
-                        document.getElementById('progressContainer').style.display = 'none';
-                    }
-                })
-                .catch(err => console.log('Progress fetch error:', err));
-        }, 1000);
+        function showNotification(message, type = 'info') {
+            const colors = {
+                'success': 'bg-emerald-500',
+                'error': 'bg-rose-500',
+                'warning': 'bg-amber-500',
+                'info': 'bg-sky-500'
+            };
+            
+            const notification = document.createElement('div');
+            notification.className = `fixed top-4 left-1/2 transform -translate-x-1/2 ${colors[type]} text-white px-4 py-2 rounded-lg shadow-lg z-50 transition-all duration-300`;
+            notification.textContent = message;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
 
         function formatBytes(bytes) {
             if (bytes === 0) return '0 B';
@@ -229,6 +489,30 @@
             const i = Math.floor(Math.log(bytes) / Math.log(k));
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            startProgressPolling();
+            
+            // Add form submission feedback
+            const forms = document.querySelectorAll('form');
+            forms.forEach(form => {
+                form.addEventListener('submit', function() {
+                    const submitBtn = form.querySelector('button[type="submit"]');
+                    if (submitBtn) {
+                        submitBtn.disabled = true;
+                        submitBtn.textContent = 'در حال ارسال...';
+                    }
+                });
+            });
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', function() {
+            if (progressInterval) {
+                clearInterval(progressInterval);
+            }
+        });
     </script>
 </body>
 </html>
