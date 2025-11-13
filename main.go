@@ -1,59 +1,37 @@
 package main
 
 import (
-	"archive/zip"
 	"context"
 	"embed"
 	"encoding/json"
-	"flag"
+	"errors"
 	"fmt"
 	"html/template"
-	"io"
+	"log"
+	"math/rand"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"sort"
-	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
+
+	"ollama-model-downloader/config"
+	"ollama-model-downloader/models"
 )
 
 //go:embed templates/index.html
 var templateFS embed.FS
 
-const (
-	defaultRegistry = "https://registry.ollama.ai"
-	defaultWebPort  = 8080
-)
-
 var (
-	currentZip        string
+	currentProgressMu sync.RWMutex
 	currentProgress   *progress
-	globalCancel      context.CancelFunc
-	currentMessage    string
-	pauseRequested    atomic.Bool
-	currentSessionDir string
 )
-
-type PageData struct {
-	Message         string
-	ZipPath         string
-	Downloads       []downloadEntry
-	RunningSession  *partialSessionView
-	PausedSessions  []partialSessionView
-	ErroredSessions []partialSessionView
-}
-
-type downloadEntry struct {
-	Name    string
-	Model   string
-	Path    string
-	ModTime time.Time
-}
 
 type sessionMeta struct {
 	Model       string    `json:"model"`
@@ -97,627 +75,477 @@ func saveSessionMeta(meta sessionMeta) error {
 	return os.WriteFile(sessionMetaPath(meta.StagingRoot), data, 0o644)
 }
 
-type partialSessionView struct {
+type pageData struct {
+	Downloads []models.DownloadEntry
+	Queue     []taskView
+	Message   string
+}
+
+type queueState string
+
+const (
+	stateQueued      queueState = "queued"
+	stateDownloading queueState = "downloading"
+	statePaused      queueState = "paused"
+	stateCanceled    queueState = "canceled"
+	stateError       queueState = "error"
+	stateDone        queueState = "done"
+)
+
+func queueStateLabel(state queueState) string {
+	switch state {
+	case stateDownloading:
+		return "Downloading"
+	case statePaused:
+		return "Paused"
+	case stateCanceled:
+		return "Canceled"
+	case stateError:
+		return "Error"
+	case stateDone:
+		return "Completed"
+	default:
+		return "Queued"
+	}
+}
+
+func queueStateClass(state queueState) string {
+	switch state {
+	case stateDownloading:
+		return "state-running"
+	case statePaused:
+		return "state-paused"
+	case stateCanceled:
+		return "state-canceled"
+	case stateError:
+		return "state-error"
+	case stateDone:
+		return "state-done"
+	default:
+		return "state-queued"
+	}
+}
+
+type taskView struct {
+	ID         string
 	Model      string
-	SessionID  string
-	Started    string
-	Updated    string
+	State      queueState
 	StateLabel string
+	StateClass string
 	Message    string
+	Percent    int
+	Done       int64
+	Total      int64
+	CreatedAt  string
+	UpdatedAt  string
+	ZipName    string
 }
 
-func discoverPartialSessions(outputDir string) ([]sessionMeta, error) {
-	entries, err := os.ReadDir(outputDir)
-	if err != nil {
-		return nil, err
+type downloadTask struct {
+	ID        string
+	Model     string
+	Sanitized string
+	State     queueState
+	Message   string
+	ZipName   string
+	ZipPath   string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	Progress  *progress
+	cancel    context.CancelFunc
+}
+
+func (t *downloadTask) view() taskView {
+	var done, total int64
+	if t.Progress != nil {
+		done = atomic.LoadInt64(&t.Progress.done)
+		total = t.Progress.total
 	}
-	var sessions []sessionMeta
-	for _, entry := range entries {
-		if !entry.IsDir() || !strings.HasSuffix(entry.Name(), ".staging") {
+	percent := 0
+	if total > 0 {
+		percent = int((done * 100) / total)
+	}
+	return taskView{
+		ID:         t.ID,
+		Model:      t.Model,
+		State:      t.State,
+		StateLabel: queueStateLabel(t.State),
+		StateClass: queueStateClass(t.State),
+		Message:    t.Message,
+		Percent:    percent,
+		Done:       done,
+		Total:      total,
+		CreatedAt:  formatTime(t.CreatedAt),
+		UpdatedAt:  formatTime(t.UpdatedAt),
+		ZipName:    t.ZipName,
+	}
+}
+
+type downloadManager struct {
+	cfg          *config.Config
+	downloadsDir string
+	tasks        []*downloadTask
+	mu           sync.Mutex
+	cond         *sync.Cond
+}
+
+func newDownloadManager(cfg *config.Config) *downloadManager {
+	m := &downloadManager{
+		cfg:          cfg,
+		downloadsDir: cfg.OutputDir,
+	}
+	m.cond = sync.NewCond(&m.mu)
+	return m
+}
+
+func (m *downloadManager) Snapshot() []taskView {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	views := make([]taskView, 0, len(m.tasks))
+	for _, task := range m.tasks {
+		views = append(views, task.view())
+	}
+	return views
+}
+
+func (m *downloadManager) Enqueue(model string) {
+	sanitized := config.SanitizeModelName(model)
+	id := newTaskID()
+	zipName := fmt.Sprintf("%s-%s.zip", sanitized, id)
+	task := &downloadTask{
+		ID:        id,
+		Model:     model,
+		Sanitized: sanitized,
+		State:     stateQueued,
+		Message:   "Queued",
+		ZipName:   zipName,
+		ZipPath:   filepath.Join(m.downloadsDir, zipName),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	m.mu.Lock()
+	m.tasks = append(m.tasks, task)
+	m.cond.Signal()
+	m.mu.Unlock()
+}
+
+func (m *downloadManager) runQueue() {
+	for {
+		m.mu.Lock()
+		task := m.nextQueuedTaskLocked()
+		for task == nil {
+			m.cond.Wait()
+			task = m.nextQueuedTaskLocked()
+		}
+		task.State = stateDownloading
+		task.Message = "Downloading..."
+		task.UpdatedAt = time.Now()
+		m.mu.Unlock()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		task.cancel = cancel
+		progress := &progress{}
+		setCurrentProgress(progress)
+		task.Progress = progress
+		err := m.downloadModel(ctx, task)
+		setCurrentProgress(nil)
+		cancel()
+
+		m.mu.Lock()
+		if task.State == statePaused || task.State == stateCanceled {
+			task.cancel = nil
+			task.UpdatedAt = time.Now()
+			m.mu.Unlock()
 			continue
 		}
-		meta, err := loadSessionMeta(filepath.Join(outputDir, entry.Name()))
 		if err != nil {
-			continue
-		}
-		sessions = append(sessions, meta)
-	}
-	return sessions, nil
-}
-
-func categorizeSessions(metas []sessionMeta) (running *partialSessionView, paused, errored []partialSessionView) {
-	sort.Slice(metas, func(i, j int) bool {
-		return metas[i].LastUpdated.After(metas[j].LastUpdated)
-	})
-	for _, meta := range metas {
-		view := sessionViewFromMeta(meta)
-		switch strings.ToLower(meta.State) {
-		case "downloading":
-			if running == nil {
-				tmp := view
-				running = &tmp
+			if errors.Is(err, context.Canceled) && (task.State == statePaused || task.State == stateCanceled) {
+			} else {
+				task.State = stateError
+				task.Message = err.Error()
 			}
-		case "paused":
-			paused = append(paused, view)
-		case "error":
-			errored = append(errored, view)
-		default:
-			paused = append(paused, view)
+		} else {
+			task.State = stateDone
+			task.Message = "Completed"
 		}
-	}
-	return
-}
-
-func downloadsFromDir(dir string) []downloadEntry {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil
-	}
-	var downloads []downloadEntry
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".zip") {
-			continue
-		}
-		info, err := entry.Info()
-		if err != nil {
-			continue
-		}
-		downloads = append(downloads, downloadEntry{
-			Name:    entry.Name(),
-			Model:   strings.TrimSuffix(entry.Name(), ".zip"),
-			Path:    filepath.Join(dir, entry.Name()),
-			ModTime: info.ModTime(),
-		})
-	}
-	sort.Slice(downloads, func(i, j int) bool {
-		return downloads[i].ModTime.After(downloads[j].ModTime)
-	})
-	return downloads
-}
-
-func sessionViewFromMeta(meta sessionMeta) partialSessionView {
-	return partialSessionView{
-		Model:      meta.Model,
-		SessionID:  meta.SessionID,
-		Started:    formatSessionTime(meta.StartedAt),
-		Updated:    formatSessionTime(meta.LastUpdated),
-		StateLabel: stateLabel(meta.State),
-		Message:    meta.Message,
+		task.cancel = nil
+		task.UpdatedAt = time.Now()
+		m.mu.Unlock()
 	}
 }
 
-func formatSessionTime(t time.Time) string {
+func (m *downloadManager) nextQueuedTaskLocked() *downloadTask {
+	for _, task := range m.tasks {
+		if task.State == stateQueued {
+			return task
+		}
+	}
+	return nil
+}
+
+func (m *downloadManager) downloadModel(ctx context.Context, task *downloadTask) error {
+	staging := filepath.Join(m.downloadsDir, fmt.Sprintf("%s-%s.staging", task.Sanitized, task.ID))
+	opt := options{
+		model:       task.Model,
+		registry:    m.cfg.Registry,
+		platform:    m.cfg.Platform,
+		outZip:      task.ZipPath,
+		concurrency: m.cfg.Concurrency,
+		retries:     m.cfg.Retries,
+		timeout:     m.cfg.Timeout,
+		insecureTLS: m.cfg.InsecureTLS,
+		stagingDir:  staging,
+		sessionID:   task.ID,
+	}
+	return run(ctx, opt)
+}
+
+func (m *downloadManager) performAction(id, action string) (string, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	task := m.findTaskLocked(id)
+	if task == nil {
+		return "Task not found", false
+	}
+	switch action {
+	case "pause":
+		if task.State == stateDownloading {
+			task.State = statePaused
+			task.Message = "Paused"
+			if task.cancel != nil {
+				task.cancel()
+			}
+			task.UpdatedAt = time.Now()
+			return "Paused", true
+		}
+		if task.State == stateQueued {
+			task.State = statePaused
+			task.Message = "Paused"
+			task.UpdatedAt = time.Now()
+			return "Paused queued task", true
+		}
+		return "Cannot pause task in this state", false
+	case "resume":
+		if task.State == statePaused || task.State == stateError || task.State == stateCanceled {
+			task.State = stateQueued
+			task.Message = "Queued"
+			task.UpdatedAt = time.Now()
+			task.Progress = nil
+			m.cond.Signal()
+			return "Resumed", true
+		}
+		return "Cannot resume task", false
+	case "cancel":
+		if task.State == stateDownloading {
+			task.State = stateCanceled
+			task.Message = "Canceled"
+			if task.cancel != nil {
+				task.cancel()
+			}
+			task.UpdatedAt = time.Now()
+			return "Canceled", true
+		}
+		if task.State == stateQueued || task.State == statePaused {
+			task.State = stateCanceled
+			task.Message = "Canceled"
+			task.UpdatedAt = time.Now()
+			return "Canceled", true
+		}
+		return "Cannot cancel task", false
+	default:
+		return "Unknown action", false
+	}
+}
+
+func (m *downloadManager) findTaskLocked(id string) *downloadTask {
+	for _, task := range m.tasks {
+		if task.ID == id {
+			return task
+		}
+	}
+	return nil
+}
+
+type server struct {
+	tmpl    *template.Template
+	manager *downloadManager
+}
+
+func (s *server) handleIndex(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	data := pageData{
+		Downloads: models.DownloadsFromDir(s.manager.downloadsDir),
+		Queue:     s.manager.Snapshot(),
+		Message:   r.URL.Query().Get("message"),
+	}
+	if err := s.tmpl.Execute(w, data); err != nil {
+		http.Error(w, "failed to render page", http.StatusInternalServerError)
+	}
+}
+
+func (s *server) handleQueueAdd(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		redirectWithMessage(w, r, "Invalid form")
+		return
+	}
+	model := strings.TrimSpace(r.FormValue("model"))
+	if model == "" {
+		redirectWithMessage(w, r, "Model name required")
+		return
+	}
+	s.manager.Enqueue(model)
+	redirectWithMessage(w, r, "Model queued")
+}
+
+func (s *server) handleQueueAction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		redirectWithMessage(w, r, "Invalid action")
+		return
+	}
+	id := strings.TrimSpace(r.FormValue("id"))
+	action := strings.TrimSpace(r.FormValue("action"))
+	if id == "" || action == "" {
+		redirectWithMessage(w, r, "Missing action parameters")
+		return
+	}
+	msg, ok := s.manager.performAction(id, action)
+	if ok {
+		redirectWithMessage(w, r, msg)
+	} else {
+		redirectWithMessage(w, r, msg)
+	}
+}
+
+func (s *server) handleZip(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	name := strings.TrimPrefix(r.URL.Path, "/download/")
+	if name == "" {
+		http.NotFound(w, r)
+		return
+	}
+	path := filepath.Join(s.manager.downloadsDir, name)
+	baseDir := filepath.Clean(s.manager.downloadsDir)
+	if !strings.HasPrefix(filepath.Clean(path), baseDir+string(os.PathSeparator)) {
+		http.NotFound(w, r)
+		return
+	}
+	info, err := os.Stat(path)
+	if err != nil || info.IsDir() {
+		http.NotFound(w, r)
+		return
+	}
+	http.ServeFile(w, r, path)
+}
+
+func redirectWithMessage(w http.ResponseWriter, r *http.Request, message string) {
+	target := "/"
+	if message != "" {
+		target = "/?message=" + url.QueryEscape(message)
+	}
+	http.Redirect(w, r, target, http.StatusSeeOther)
+}
+
+func formatTime(t time.Time) string {
 	if t.IsZero() {
-		return "نامشخص"
+		return "-"
 	}
 	return t.Format("2006-01-02 15:04:05")
 }
 
-func stateLabel(state string) string {
-	switch strings.ToLower(state) {
-	case "downloading":
-		return "در حال دانلود"
-	case "paused":
-		return "مکث شده"
-	case "error":
-		return "خطا"
-	default:
-		if state == "" {
-			return "در انتظار"
-		}
-		return state
-	}
+func setCurrentProgress(p *progress) {
+	currentProgressMu.Lock()
+	currentProgress = p
+	currentProgressMu.Unlock()
 }
 
-func beginDownloadSession(opt options, startMessage string) {
-	pauseRequested.Store(false)
-	currentZip = opt.outZip
-	currentProgress = newProgress(0)
-	currentMessage = startMessage
-	currentSessionDir = opt.stagingDir
-
-	ctx, cancel := context.WithCancel(context.Background())
-	globalCancel = cancel
-
-	go func() {
-		err := run(ctx, opt)
-		globalCancel = nil
-		currentProgress = nil
-		currentSessionDir = ""
-		paused := pauseRequested.Load()
-		pauseRequested.Store(false)
-		if err != nil {
-			if err == context.Canceled {
-				if paused {
-					currentMessage = "دانلود متوقف شد."
-				} else {
-					currentMessage = "دانلود لغو شد."
-				}
-			} else {
-				setSessionStatus(opt.stagingDir, "error", err.Error())
-				currentMessage = fmt.Sprintf("دانلود ناموفق: %s", err.Error())
-			}
-		} else {
-			currentMessage = "دانلود کامل شد."
-		}
-	}()
-}
-
-func setSessionStatus(dir, state, message string) {
-	if dir == "" {
-		return
-	}
-	meta, err := loadSessionMeta(dir)
-	if err != nil {
-		return
-	}
-	meta.State = state
-	meta.Message = message
-	_ = saveSessionMeta(meta)
-}
-
-func main() {
-	var opt options
-
-	flag.StringVar(&opt.registry, "registry", defaultRegistry, "registry base URL")
-	flag.IntVar(&opt.concurrency, "concurrency", 4, "number of concurrent blob downloads")
-	flag.BoolVar(&opt.verbose, "v", false, "verbose logging")
-	flag.BoolVar(&opt.keepStaging, "keep-staging", false, "keep staging directory (do not delete after zip)")
-	flag.IntVar(&opt.retries, "retries", 3, "retry attempts for transient errors")
-	var timeoutSec int
-	flag.IntVar(&timeoutSec, "timeout", 0, "overall request timeout seconds (0 = no limit)")
-	flag.BoolVar(&opt.insecureTLS, "insecure", false, "skip TLS verification (NOT recommended)")
-	// Default platform from runtime
-	defaultPlatform := fmt.Sprintf("linux/%s", archFromGo(runtime.GOARCH))
-	flag.StringVar(&opt.platform, "platform", defaultPlatform, "target platform (linux/amd64 or linux/arm64)")
-	flag.StringVar(&opt.outZip, "o", "", "output zip path (default: <model>.zip)")
-	flag.StringVar(&opt.outputDir, "output-dir", "downloaded-models", "directory to save downloaded models")
-	flag.IntVar(&opt.port, "port", 0, "port to listen on (0 for random)")
-	flag.Parse()
-
-	if flag.NArg() == 0 {
-		startWebServer(opt.port)
-	} else {
-		opt.model = flag.Arg(0)
-		opt.sessionID = sanitizeModelName(opt.model)
-		if opt.outZip == "" {
-			zipName := opt.sessionID
-			if !strings.HasSuffix(strings.ToLower(zipName), ".zip") {
-				zipName += ".zip"
-			}
-			opt.outZip = filepath.Join(opt.outputDir, zipName)
-		}
-		opt.stagingDir = filepath.Join(opt.outputDir, opt.sessionID+".staging")
-
-		if timeoutSec > 0 {
-			opt.timeout = time.Duration(timeoutSec) * time.Second
-		} else {
-			opt.timeout = 0
-		}
-
-		if err := run(context.Background(), opt); err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
-			os.Exit(1)
-		}
-	}
-}
-
-func archFromGo(goarch string) string {
-	switch goarch {
-	case "amd64":
-		return "amd64"
-	case "arm64":
-		return "arm64"
-	default:
-		return goarch
-	}
-}
-
-func sanitizeModelName(model string) string {
-	s := strings.TrimSpace(model)
-	if s == "" {
-		return "model"
-	}
-	s = strings.Map(func(r rune) rune {
-		switch {
-		case r == '/' || r == ':' || r == '@' || r == '\\' || r == ' ':
-			return '-'
-		default:
-			return r
-		}
-	}, s)
-	s = strings.ToLower(strings.Trim(s, "-"))
-	if s == "" {
-		return "model"
-	}
-	return s
-}
-
-func startWebServer(port int) {
-	// Create template with custom functions
-	funcMap := template.FuncMap{
-		"contains": strings.Contains,
-	}
-	tmpl, err := template.New("index.html").Funcs(funcMap).ParseFS(templateFS, "templates/index.html")
-	if err != nil {
-		fmt.Println("Error parsing template:", err)
-		return
-	}
-
-	downloadsDir := "downloaded-models"
-	if err := os.MkdirAll(downloadsDir, 0o755); err != nil {
-		fmt.Println("Error creating downloads directory:", err)
-		return
-	}
-
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		data := PageData{Message: currentMessage}
-		if currentZip != "" {
-			if _, err := os.Stat(currentZip); err == nil {
-				data.ZipPath = currentZip
-			}
-		}
-		// List downloaded models
-		data.Downloads = downloadsFromDir(downloadsDir)
-		if sessions, err := discoverPartialSessions(downloadsDir); err == nil {
-			running, paused, errored := categorizeSessions(sessions)
-			data.RunningSession = running
-			data.PausedSessions = paused
-			data.ErroredSessions = errored
-		}
-		tmpl.Execute(w, data)
-	})
-
-	http.HandleFunc("/download", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		if err := r.ParseForm(); err != nil {
-			http.Error(w, "Bad request", http.StatusBadRequest)
-			return
-		}
-		model := r.FormValue("model")
-		outputDir := downloadsDir
-		concurrencyStr := r.FormValue("concurrency")
-		concurrency, _ := strconv.Atoi(concurrencyStr)
-		if concurrency <= 0 {
-			concurrency = 4
-		}
-		retriesStr := r.FormValue("retries")
-		retries, _ := strconv.Atoi(retriesStr)
-		if retries < 0 {
-			retries = 3
-		}
-
-		opt := options{
-			model:       model,
-			registry:    defaultRegistry,
-			platform:    fmt.Sprintf("linux/%s", archFromGo(runtime.GOARCH)),
-			concurrency: concurrency,
-			verbose:     false,
-			keepStaging: false,
-			retries:     retries,
-			timeout:     0,
-			insecureTLS: false,
-			outputDir:   outputDir,
-		}
-
-		sessionID := sanitizeModelName(opt.model)
-		opt.sessionID = sessionID
-		zipName := sessionID
-		if !strings.HasSuffix(strings.ToLower(zipName), ".zip") {
-			zipName += ".zip"
-		}
-		opt.outZip = filepath.Join(opt.outputDir, zipName)
-		opt.stagingDir = filepath.Join(opt.outputDir, sessionID+".staging")
-
-		beginDownloadSession(opt, "در حال دانلود...")
-
-		http.Redirect(w, r, "/", http.StatusFound)
-	})
-
-	http.HandleFunc("/model/action", modelActionHandler(downloadsDir))
-
-	http.HandleFunc("/resume", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		if err := r.ParseForm(); err != nil {
-			http.Error(w, "Bad request", http.StatusBadRequest)
-			return
-		}
-		sessionID := r.FormValue("session")
-		if sessionID == "" {
-			http.Error(w, "Missing session ID", http.StatusBadRequest)
-			return
-		}
-		staging := filepath.Join(downloadsDir, sessionID+".staging")
-		meta, err := loadSessionMeta(staging)
-		if err != nil {
-			http.Error(w, "Session not found", http.StatusNotFound)
-			return
-		}
-		registry := meta.Registry
-		if registry == "" {
-			registry = defaultRegistry
-		}
-		platform := meta.Platform
-		if platform == "" {
-			platform = fmt.Sprintf("linux/%s", archFromGo(runtime.GOARCH))
-		}
-		concurrency := meta.Concurrency
-		if concurrency <= 0 {
-			concurrency = 4
-		}
-		retries := meta.Retries
-		if retries < 0 {
-			retries = 3
-		}
-
-		zipPath := meta.OutZip
-		if zipPath == "" {
-			name := sessionID
-			if !strings.HasSuffix(strings.ToLower(name), ".zip") {
-				name += ".zip"
-			}
-			zipPath = filepath.Join(downloadsDir, name)
-		}
-
-		opt := options{
-			model:       meta.Model,
-			registry:    registry,
-			platform:    platform,
-			concurrency: concurrency,
-			verbose:     false,
-			keepStaging: false,
-			retries:     retries,
-			timeout:     0,
-			insecureTLS: false,
-			outputDir:   downloadsDir,
-			sessionID:   meta.SessionID,
-			stagingDir:  staging,
-			outZip:      zipPath,
-		}
-		setSessionStatus(staging, "downloading", "در حال ادامه دانلود...")
-		beginDownloadSession(opt, "در حال ادامه دانلود...")
-		http.Redirect(w, r, "/", http.StatusFound)
-	})
-
-	http.HandleFunc("/download/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		filename := strings.TrimPrefix(r.URL.Path, "/download/")
-		if filename == "" {
-			http.Error(w, "Not found", http.StatusNotFound)
-			return
-		}
-		if _, err := os.Stat(filename); os.IsNotExist(err) {
-			http.Error(w, "File not found", http.StatusNotFound)
-			return
-		}
-		http.ServeFile(w, r, filename)
-	})
-
-	http.HandleFunc("/progress", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		data := ProgressData{}
-		if currentProgress != nil {
-			data.Done = atomic.LoadInt64(&currentProgress.done)
-			data.Total = currentProgress.total
-			if data.Total > 0 {
-				data.Percent = int((data.Done * 100) / data.Total)
-			}
-		}
-		json.NewEncoder(w).Encode(data)
-	})
-
-	http.HandleFunc("/cancel", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		pauseRequested.Store(false)
-		if globalCancel != nil {
-			setSessionStatus(currentSessionDir, "paused", "لغو شد")
-			globalCancel()
-		}
-		http.Redirect(w, r, "/", http.StatusFound)
-	})
-
-	http.HandleFunc("/pause", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		if globalCancel != nil {
-			pauseRequested.Store(true)
-			setSessionStatus(currentSessionDir, "paused", "مکث شد")
-			globalCancel()
-		}
-		http.Redirect(w, r, "/", http.StatusFound)
-	})
-
-	bindPort := port
-	if bindPort == 0 {
-		bindPort = defaultWebPort
-	}
-	addr := fmt.Sprintf(":%d", bindPort)
-	listener, err := net.Listen("tcp", addr)
-	if err != nil {
-		fmt.Printf("پورت %d در دسترس نیست، استفاده از پورت تصادفی...\n", bindPort)
-		listener, err = net.Listen("tcp", ":0")
-		if err != nil {
-			fmt.Println("Error starting server:", err)
-			return
-		}
-	}
-	actualPort := listener.Addr().(*net.TCPAddr).Port
-	fmt.Printf("Running on http://localhost:%d\n", actualPort)
-	go http.Serve(listener, nil)
-	url := fmt.Sprintf("http://localhost:%d", actualPort)
-	openBrowser(url)
-	select {}
-}
-
-func modelActionHandler(downloadsDir string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		if err := r.ParseForm(); err != nil {
-			http.Error(w, "Bad request", http.StatusBadRequest)
-			return
-		}
-		name := r.FormValue("name")
-		action := r.FormValue("action")
-		if name == "" || action == "" {
-			http.Error(w, "Missing parameters", http.StatusBadRequest)
-			return
-		}
-		target := filepath.Join(downloadsDir, name)
-		var msg string
-		var err error
-		switch action {
-		case "delete":
-			err = os.Remove(target)
-			if err == nil {
-				staging := filepath.Join(downloadsDir, strings.TrimSuffix(name, ".zip")+".staging")
-				_ = os.RemoveAll(staging)
-				msg = fmt.Sprintf("%s حذف شد.", name)
-			}
-		case "open-folder":
-			err = openExplorer(downloadsDir)
-			if err == nil {
-				msg = "پوشه دانلود باز شد."
-			}
-		case "unzip":
-			dest, derr := ollamaModelsDir()
-			if derr != nil {
-				err = derr
-				break
-			}
-			err = unzipToDir(target, dest)
-			if err == nil {
-				msg = fmt.Sprintf("%s به %s استخراج شد.", name, dest)
-			}
-		default:
-			err = fmt.Errorf("عمل نامعتبر: %s", action)
-		}
-		if err != nil {
-			currentMessage = fmt.Sprintf("خطا: %s", err)
-		} else if msg != "" {
-			currentMessage = msg
-		}
-		http.Redirect(w, r, "/", http.StatusFound)
-	}
-}
-
-func openExplorer(path string) error {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "darwin":
-		cmd = exec.Command("open", path)
-	case "linux":
-		cmd = exec.Command("xdg-open", path)
-	case "windows":
-		cmd = exec.Command("cmd", "/c", "start", "", path)
-	default:
-		return fmt.Errorf("unsupported OS")
-	}
-	return cmd.Start()
-}
-
-func ollamaModelsDir() (string, error) {
-	if dir := os.Getenv("OLLAMA_MODELS_DIR"); dir != "" {
-		return dir, nil
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	switch runtime.GOOS {
-	case "windows":
-		if local := os.Getenv("LOCALAPPDATA"); local != "" {
-			return filepath.Join(local, "Ollama", "models"), nil
-		}
-		return filepath.Join(home, "AppData", "Local", "Ollama", "models"), nil
-	default:
-		return filepath.Join(home, ".ollama", "models"), nil
-	}
-}
-
-func unzipToDir(zipPath, dest string) error {
-	r, err := zip.OpenReader(zipPath)
-	if err != nil {
-		return err
-	}
-	defer r.Close()
-
-	destClean := filepath.Clean(dest)
-	if err := os.MkdirAll(destClean, 0o755); err != nil {
-		return err
-	}
-
-	for _, f := range r.File {
-		if f.FileInfo().IsDir() {
-			targetDir := filepath.Join(destClean, filepath.FromSlash(f.Name))
-			if err := os.MkdirAll(targetDir, f.Mode()); err != nil {
-				return err
-			}
-			continue
-		}
-		targetPath := filepath.Join(destClean, filepath.FromSlash(f.Name))
-		if !strings.HasPrefix(filepath.Clean(targetPath), destClean+string(os.PathSeparator)) && filepath.Clean(targetPath) != destClean {
-			return fmt.Errorf("invalid file path: %s", f.Name)
-		}
-		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
-			return err
-		}
-		out, err := os.OpenFile(targetPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, f.Mode())
-		if err != nil {
-			return err
-		}
-		rc, err := f.Open()
-		if err != nil {
-			out.Close()
-			return err
-		}
-		if _, err := io.Copy(out, rc); err != nil {
-			rc.Close()
-			out.Close()
-			return err
-		}
-		rc.Close()
-		out.Close()
-	}
-	return nil
+func newTaskID() string {
+	return fmt.Sprintf("%d%04d", time.Now().UnixNano(), rand.Intn(10000))
 }
 
 func openBrowser(url string) {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin":
-		cmd = exec.Command("open", "-a", "Google Chrome", url)
+		cmd = exec.Command("open", url)
 	case "linux":
-		cmd = exec.Command("google-chrome", url)
+		cmd = exec.Command("xdg-open", url)
 	case "windows":
-		cmd = exec.Command("cmd", "/c", "start", "chrome.exe", url)
+		cmd = exec.Command("cmd", "/c", "start", "", url)
 	default:
-		fmt.Println("Unsupported OS for opening browser")
 		return
 	}
-	cmd.Start()
+	_ = cmd.Start()
+}
+
+func main() {
+	rand.Seed(time.Now().UnixNano())
+	cfg, err := config.Parse()
+	if err != nil {
+		log.Fatalf("failed to parse config: %v", err)
+	}
+	if cfg.OutputDir == "" {
+		cfg.OutputDir = "downloaded-models"
+	}
+	if err := os.MkdirAll(cfg.OutputDir, 0o755); err != nil {
+		log.Fatalf("failed to create downloads dir: %v", err)
+	}
+
+	manager := newDownloadManager(cfg)
+	go manager.runQueue()
+
+	tmpl, err := template.New("index.html").Funcs(template.FuncMap{
+		"formatTime": formatTime,
+		"humanBytes": humanBytes,
+		"stateLabel": queueStateLabel,
+		"stateClass": queueStateClass,
+	}).ParseFS(templateFS, "templates/index.html")
+	if err != nil {
+		log.Fatalf("failed to parse template: %v", err)
+	}
+
+	server := &server{
+		tmpl:    tmpl,
+		manager: manager,
+	}
+
+	addr := fmt.Sprintf(":%d", cfg.Port)
+	if cfg.Port == 0 {
+		addr = ":0"
+	}
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		listener, err = net.Listen("tcp", ":0")
+		if err != nil {
+			log.Fatalf("failed to start server: %v", err)
+		}
+	}
+
+	actualPort := listener.Addr().(*net.TCPAddr).Port
+	url := fmt.Sprintf("http://localhost:%d", actualPort)
+	fmt.Println("Opening web UI at", url)
+	go openBrowser(url)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", server.handleIndex)
+	mux.HandleFunc("/queue/add", server.handleQueueAdd)
+	mux.HandleFunc("/queue/action", server.handleQueueAction)
+	mux.HandleFunc("/download/", server.handleZip)
+
+	if err := http.Serve(listener, mux); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Fatalf("server terminated: %v", err)
+	}
 }
