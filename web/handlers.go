@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"ollama-model-downloader/internal/errors"
+	"ollama-model-downloader/models"
 )
 
 type Server struct {
@@ -169,8 +170,32 @@ func (s *Server) handlePause(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getPageData() interface{} {
-	// Return page data for template
-	return struct{}{}
+	// Get downloads
+	downloads := models.DownloadsFromDir(s.downloadsDir)
+
+	// Get session metadata
+	sessions, err := models.DiscoverPartialSessions(s.downloadsDir)
+	if err != nil {
+		// Log error but continue
+		fmt.Printf("Error discovering sessions: %v\n", err)
+	}
+
+	// Categorize sessions
+	running, paused, errored := models.CategorizeSessions(sessions)
+
+	return struct {
+		Downloads       []models.DownloadEntry
+		RunningSession  *models.SessionView
+		PausedSessions  []models.SessionView
+		ErroredSessions []models.SessionView
+		Message         string
+	}{
+		Downloads:       downloads,
+		RunningSession:  running,
+		PausedSessions:  paused,
+		ErroredSessions: errored,
+		Message:         "", // Can be set based on query params or other logic
+	}
 }
 
 func js(value string) string {
