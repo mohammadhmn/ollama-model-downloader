@@ -78,6 +78,126 @@ Convert the Ollama-specific downloader into a flexible file downloader that acce
 - [ ] Remove: Unzip (convert to optional download option)
 - [ ] Add: Copy download link button
 
+## Phase 2.5: Full-Fledged Download Manager Features
+
+### 2.5.1 Multiple Concurrent Downloads
+- [ ] Queue management system (add, remove, reorder)
+- [ ] Support for multiple simultaneous downloads (configurable)
+- [ ] Priority system (high, normal, low)
+- [ ] Pause individual or all downloads
+- [ ] Resume individual or all downloads
+- [ ] Cancel individual or all downloads
+- [ ] Visual queue display with status for each
+
+### 2.5.2 Advanced Progress Tracking
+- [ ] Show download speed (KB/s, MB/s)
+- [ ] Calculate and display ETA (time remaining)
+- [ ] Show time elapsed
+- [ ] Show current/total file size in real-time
+- [ ] Percentage progress bar with smooth animation
+- [ ] Aggregate statistics for multiple downloads
+
+### 2.5.3 Download History & Statistics
+- [ ] Track all completed downloads with timestamps
+- [ ] Show completion time for each download
+- [ ] Display total downloaded data (session and all-time)
+- [ ] Show average download speed
+- [ ] Persistent history across sessions
+- [ ] Filter/search download history
+- [ ] Delete history entries
+
+### 2.5.4 Enhanced Form Controls
+- [ ] Batch URL input (paste multiple URLs at once)
+- [ ] URL validation with preview of filename/size
+- [ ] Drag & drop for URL input or file list
+- [ ] Save download presets/templates
+- [ ] Import/export download lists
+- [ ] Concurrent download limit selector (1-32)
+- [ ] Bandwidth limiting option (KB/s cap)
+- [ ] Auto-retry configuration
+- [ ] Notification settings
+
+### 2.5.5 Download Management UI
+- [ ] Tabs/sections: Active, Queue, Completed, History
+- [ ] Search/filter downloads by name or URL
+- [ ] Sort by: name, size, speed, date, status
+- [ ] Bulk actions (select multiple downloads):
+  - [ ] Delete selected
+  - [ ] Pause/Resume selected
+  - [ ] Move to top/bottom of queue
+  - [ ] Open folder for selected
+
+### 2.5.6 File Management
+- [ ] Show file size after header fetch
+- [ ] Confirm overwrite if file exists
+- [ ] Auto-rename on conflict (file.zip → file (1).zip)
+- [ ] Move/copy downloaded files
+- [ ] View file properties (size, type, date)
+- [ ] Open file location or file directly
+- [ ] Calculate and display total disk space used
+
+### 2.5.7 Advanced Download Options
+- [ ] Custom headers input (for protected URLs)
+- [ ] User-Agent selector (browser, custom)
+- [ ] Follow redirects (automatic, configurable)
+- [ ] Cookie support (future)
+- [ ] Proxy configuration (future)
+- [ ] SSL/TLS verification toggle
+- [ ] Filename pattern templates
+
+### 2.5.8 UI/UX Enhancements
+- [ ] Dark/Light theme toggle
+- [ ] Responsive design for mobile/tablet
+- [ ] Keyboard shortcuts for common actions
+- [ ] Right-click context menu for downloads
+- [ ] Drag to reorder queue
+- [ ] Floating progress widget (minimize main window)
+- [ ] Notifications for completion/errors
+- [ ] Auto-refresh settings (interval selector)
+- [ ] Smooth animations and transitions
+- [ ] Accessibility improvements (ARIA labels, keyboard nav)
+
+### 2.5.9 Status Indicators & Notifications
+- [ ] Color-coded status badges:
+  - [ ] Green: Downloading/Active
+  - [ ] Yellow: Paused
+  - [ ] Blue: Queued
+  - [ ] Red: Error
+  - [ ] Gray: Completed
+- [ ] Toast notifications for actions
+- [ ] Desktop notifications for completion (future)
+- [ ] Error detail messages with suggestions
+- [ ] Warning for slow connections
+
+### 2.5.10 Settings Panel
+- [ ] Download folder selection
+- [ ] Default save location
+- [ ] Max concurrent downloads
+- [ ] Bandwidth limit
+- [ ] Auto-start downloads
+- [ ] Clear completed automatically
+- [ ] Theme preference
+- [ ] Language selection
+- [ ] Advanced logging options
+- [ ] Cache/database cleanup
+
+### 2.5.11 Search & Filtering
+- [ ] Search by filename or URL
+- [ ] Filter by status (active, paused, completed, error)
+- [ ] Filter by date range
+- [ ] Filter by file type/extension
+- [ ] Filter by size range
+- [ ] Save filters as presets
+
+### 2.5.12 Download Statistics Dashboard
+- [ ] Total files downloaded (count & size)
+- [ ] Average download speed
+- [ ] Today's downloads vs this week vs all-time
+- [ ] Top downloaded file types
+- [ ] Most frequent domains
+- [ ] Total time saved by pausing/resuming
+- [ ] Performance metrics chart
+
 ## Phase 3: Configuration & Settings
 
 ### 3.1 Command Line Flags
@@ -191,26 +311,44 @@ type sessionMeta struct {
 
 ## Implementation Order
 
-1. **Backend First** (Phases 1, 3):
-
+### Iteration 1: MVP (Minimum Viable Product)
+1. **Backend** (Phases 1, 3):
    - Create generic download logic
    - Update data structures
    - Get CLI working with URLs
 
-2. **Integration** (Phase 5):
+2. **Basic UI** (Phase 2.1-2.4):
+   - Update form and labels
+   - Basic progress display
+   - Test web interface
 
+3. **Integration** (Phase 5):
    - Update session management
    - Test download flow
-
-3. **UI** (Phase 2):
-
-   - Update form and labels
-   - Test web interface
 
 4. **Polish** (Phases 4, 6, 7, 8):
    - Cleanup and documentation
    - Error handling refinement
-   - Testing
+
+### Iteration 2: Full-Featured Download Manager
+5. **Advanced Backend**:
+   - Multi-download queue support
+   - Download speed tracking
+   - Bandwidth limiting
+   - History/statistics persistence
+
+6. **Full-Featured UI** (Phase 2.5):
+   - Queue management (Active, Queue, Completed, History tabs)
+   - Advanced progress tracking (speed, ETA)
+   - Bulk operations
+   - Settings panel
+   - Search/filter
+   - Statistics dashboard
+
+7. **Polish & Testing** (Phase 7):
+   - Comprehensive testing
+   - Performance optimization
+   - Edge case handling
 
 ## Key Considerations
 
@@ -224,11 +362,30 @@ type sessionMeta struct {
 
 ## Success Criteria
 
+### MVP Phase (Iteration 1)
 - ✅ Download any HTTP/HTTPS file successfully
-- ✅ Show accurate progress
+- ✅ Show accurate progress percentage
 - ✅ Resume interrupted downloads
 - ✅ Pause/Resume functionality works
 - ✅ Web UI is clean and functional
 - ✅ CLI works with URLs
 - ✅ Session management persists across restarts
 - ✅ Error messages are helpful
+- ✅ Basic file management (delete, open folder)
+
+### Full-Featured Phase (Iteration 2)
+- ✅ Multiple concurrent downloads with queue management
+- ✅ Download speed tracking (KB/s, MB/s)
+- ✅ ETA calculation and display
+- ✅ Download history with statistics
+- ✅ Bulk operations (pause all, resume all, delete multiple)
+- ✅ Advanced search and filtering
+- ✅ Settings panel for customization
+- ✅ Bandwidth limiting support
+- ✅ Statistics dashboard with metrics
+- ✅ Responsive UI for mobile/tablet
+- ✅ Keyboard shortcuts for power users
+- ✅ Drag & drop file/URL support
+- ✅ URL validation with preview
+- ✅ Auto-rename on file conflicts
+- ✅ Toast notifications for user feedback
