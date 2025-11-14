@@ -1,0 +1,17 @@
+{
+  "url": "http://example.com",
+  "filename": "example.com",
+  "expectedSize": 0,
+  "model": "",
+  "registry": "",
+  "platform": "",
+  "concurrency": 0,
+  "sessionId": "downloaded-models-example.com",
+  "outZip": "downloaded-models/example.com",
+  "stagingRoot": "downloaded-models/downloaded-models-example.com.staging",
+  "retries": 3,
+  "startedAt": "2025-11-14T19:52:03.906735+03:30",
+  "lastUpdated": "2025-11-14T19:52:04.79412+03:30",
+  "state": "completed",
+  "message": "دانلود کامل شد"
+}

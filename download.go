@@ -148,6 +148,70 @@ func parseModel(registryBase, model string) (modelRef, error) {
 	return modelRef{Host: host, Repository: repository, Reference: reference, ReferenceTag: tag, IsDigest: isDigest}, nil
 }
 
+// runGenericDownload downloads a file from a generic HTTP/HTTPS URL
+func runGenericDownload(ctx context.Context, opt options, downloadURL string) error {
+	// Create session metadata
+	err := os.MkdirAll(opt.stagingDir, 0o755)
+	if err != nil {
+		return err
+	}
+
+	meta, metaErr := loadSessionMeta(opt.stagingDir)
+	if metaErr != nil && !errors.Is(metaErr, os.ErrNotExist) {
+		return metaErr
+	}
+	if meta.SessionID == "" {
+		meta.SessionID = opt.sessionID
+		meta.StartedAt = time.Now()
+	}
+	meta.URL = downloadURL
+	meta.Filename = filepath.Base(opt.outZip)
+	meta.OutZip = opt.outZip
+	meta.Retries = opt.retries
+	meta.StagingRoot = opt.stagingDir
+	meta.State = "downloading"
+	meta.Message = "آغاز دانلود..."
+	if err := saveSessionMeta(meta); err != nil {
+		return err
+	}
+
+	// Setup progress tracker
+	var p *progress
+	if currentProgress != nil {
+		p = currentProgress
+	} else {
+		p = newProgress(0) // Total will be set when we get Content-Length
+		// Don't start progress bar for generic downloads (no ETA calculation yet)
+	}
+
+	// Perform download with retry logic
+	var lastErr error
+	for attempt := 0; attempt <= opt.retries; attempt++ {
+		err := downloadFile(ctx, downloadURL, opt.outZip, p)
+		if err == nil {
+			meta.State = "completed"
+			meta.Message = "دانلود کامل شد"
+			_ = saveSessionMeta(meta)
+			fmt.Println("OK:", opt.outZip)
+			return nil
+		}
+
+		lastErr = err
+		if attempt < opt.retries {
+			if opt.verbose {
+				fmt.Printf("attempt %d failed: %v, retrying...\n", attempt+1, err)
+			}
+			time.Sleep(time.Duration((1<<uint(attempt))*500) * time.Millisecond)
+		}
+	}
+
+	// All retries exhausted
+	meta.State = "error"
+	meta.Message = fmt.Sprintf("خطا: %s", lastErr)
+	_ = saveSessionMeta(meta)
+	return fmt.Errorf("download failed after %d retries: %w", opt.retries, lastErr)
+}
+
 func run(ctx context.Context, opt options) error {
 	// HTTP client with tuned transport
 	client := newHTTPClient(opt)

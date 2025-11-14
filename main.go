@@ -56,13 +56,21 @@ type downloadEntry struct {
 }
 
 type sessionMeta struct {
-	Model       string    `json:"model"`
+	// Generic download fields
+	URL          string `json:"url"`
+	Filename     string `json:"filename"`
+	ExpectedSize int64  `json:"expectedSize"`
+
+	// Legacy Ollama fields (kept for backward compatibility, will be removed)
+	Model       string `json:"model"`
+	Registry    string `json:"registry"`
+	Platform    string `json:"platform"`
+	Concurrency int    `json:"concurrency"`
+
+	// Shared fields
 	SessionID   string    `json:"sessionId"`
 	OutZip      string    `json:"outZip"`
 	StagingRoot string    `json:"stagingRoot"`
-	Registry    string    `json:"registry"`
-	Platform    string    `json:"platform"`
-	Concurrency int       `json:"concurrency"`
 	Retries     int       `json:"retries"`
 	StartedAt   time.Time `json:"startedAt"`
 	LastUpdated time.Time `json:"lastUpdated"`
@@ -261,6 +269,56 @@ func beginDownloadSession(opt options, startMessage string) {
 	}()
 }
 
+func beginDownloadSessionForURL(opt options, downloadURL, startMessage string) {
+	pauseRequested.Store(false)
+	currentZip = opt.outZip
+	currentProgress = newProgress(0)
+	currentMessage = startMessage
+	currentSessionDir = opt.stagingDir
+
+	// Create session metadata immediately so it appears in the UI
+	_ = os.MkdirAll(opt.stagingDir, 0o755)
+	meta := sessionMeta{
+		Model:       filepath.Base(opt.outZip),
+		URL:         downloadURL,
+		SessionID:   opt.sessionID,
+		OutZip:      opt.outZip,
+		StagingRoot: opt.stagingDir,
+		Retries:     opt.retries,
+		StartedAt:   time.Now(),
+		LastUpdated: time.Now(),
+		State:       "downloading",
+		Message:     "در حال شروع دانلود...",
+	}
+	_ = saveSessionMeta(meta)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	globalCancel = cancel
+
+	go func() {
+		err := runGenericDownload(ctx, opt, downloadURL)
+		globalCancel = nil
+		currentProgress = nil
+		currentSessionDir = ""
+		paused := pauseRequested.Load()
+		pauseRequested.Store(false)
+		if err != nil {
+			if err == context.Canceled {
+				if paused {
+					currentMessage = "دانلود متوقف شد."
+				} else {
+					currentMessage = "دانلود لغو شد."
+				}
+			} else {
+				setSessionStatus(opt.stagingDir, "error", err.Error())
+				currentMessage = fmt.Sprintf("دانلود ناموفق: %s", err.Error())
+			}
+		} else {
+			currentMessage = "دانلود کامل شد."
+		}
+	}()
+}
+
 func setSessionStatus(dir, state, message string) {
 	if dir == "" {
 		return
@@ -277,34 +335,45 @@ func setSessionStatus(dir, state, message string) {
 func main() {
 	var opt options
 
-	flag.StringVar(&opt.registry, "registry", defaultRegistry, "registry base URL")
-	flag.IntVar(&opt.concurrency, "concurrency", 4, "number of concurrent blob downloads")
+	// Keep these for backward compatibility (legacy Ollama mode)
+	flag.StringVar(&opt.registry, "registry", defaultRegistry, "registry base URL (legacy Ollama mode)")
+	flag.IntVar(&opt.concurrency, "concurrency", 4, "number of concurrent blob downloads (legacy Ollama mode)")
 	flag.BoolVar(&opt.verbose, "v", false, "verbose logging")
 	flag.BoolVar(&opt.keepStaging, "keep-staging", false, "keep staging directory (do not delete after zip)")
 	flag.IntVar(&opt.retries, "retries", 3, "retry attempts for transient errors")
 	var timeoutSec int
 	flag.IntVar(&timeoutSec, "timeout", 0, "overall request timeout seconds (0 = no limit)")
 	flag.BoolVar(&opt.insecureTLS, "insecure", false, "skip TLS verification (NOT recommended)")
-	// Default platform from runtime
+	// Default platform from runtime (legacy)
 	defaultPlatform := fmt.Sprintf("linux/%s", archFromGo(runtime.GOARCH))
-	flag.StringVar(&opt.platform, "platform", defaultPlatform, "target platform (linux/amd64 or linux/arm64)")
-	flag.StringVar(&opt.outZip, "o", "", "output zip path (default: <model>.zip)")
-	flag.StringVar(&opt.outputDir, "output-dir", "downloaded-models", "directory to save downloaded models")
+	flag.StringVar(&opt.platform, "platform", defaultPlatform, "target platform (legacy Ollama mode)")
+	flag.StringVar(&opt.outZip, "o", "", "output filename")
+	flag.StringVar(&opt.outputDir, "output-dir", "downloaded-models", "directory to save downloaded files")
 	flag.IntVar(&opt.port, "port", 0, "port to listen on (0 for random)")
 	flag.Parse()
 
 	if flag.NArg() == 0 {
 		startWebServer(opt.port)
 	} else {
-		opt.model = flag.Arg(0)
-		opt.sessionID = sanitizeModelName(opt.model)
-		if opt.outZip == "" {
-			zipName := opt.sessionID
-			if !strings.HasSuffix(strings.ToLower(zipName), ".zip") {
-				zipName += ".zip"
-			}
-			opt.outZip = filepath.Join(opt.outputDir, zipName)
+		downloadURL := flag.Arg(0)
+
+		// Validate URL
+		if err := validateURL(downloadURL); err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			os.Exit(1)
 		}
+
+		// Extract filename from URL if not provided
+		if opt.outZip == "" {
+			opt.outZip = extractFilenameFromURL(downloadURL)
+		}
+		// Ensure outZip is in output directory
+		if !strings.Contains(opt.outZip, string(os.PathSeparator)) {
+			opt.outZip = filepath.Join(opt.outputDir, opt.outZip)
+		}
+
+		opt.model = downloadURL // Store URL in model field for now
+		opt.sessionID = sanitizeModelName(opt.outZip)
 		opt.stagingDir = filepath.Join(opt.outputDir, opt.sessionID+".staging")
 
 		if timeoutSec > 0 {
@@ -313,7 +382,7 @@ func main() {
 			opt.timeout = 0
 		}
 
-		if err := run(context.Background(), opt); err != nil {
+		if err := runGenericDownload(context.Background(), opt, downloadURL); err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
 			os.Exit(1)
 		}
@@ -402,24 +471,30 @@ func startWebServer(port int) {
 			http.Error(w, "Bad request", http.StatusBadRequest)
 			return
 		}
-		model := r.FormValue("model")
-		outputDir := downloadsDir
-		concurrencyStr := r.FormValue("concurrency")
-		concurrency, _ := strconv.Atoi(concurrencyStr)
-		if concurrency <= 0 {
-			concurrency = 4
+		downloadURL := r.FormValue("model")
+		outputName := r.FormValue("outputName")
+
+		// Validate URL
+		if err := validateURL(downloadURL); err != nil {
+			currentMessage = fmt.Sprintf("خطا: %s", err)
+			http.Redirect(w, r, "/", http.StatusFound)
+			return
 		}
+
+		outputDir := downloadsDir
 		retriesStr := r.FormValue("retries")
 		retries, _ := strconv.Atoi(retriesStr)
 		if retries < 0 {
 			retries = 3
 		}
 
+		// Extract or use provided filename
+		if outputName == "" {
+			outputName = extractFilenameFromURL(downloadURL)
+		}
+
 		opt := options{
-			model:       model,
-			registry:    defaultRegistry,
-			platform:    fmt.Sprintf("linux/%s", archFromGo(runtime.GOARCH)),
-			concurrency: concurrency,
+			model:       downloadURL,
 			verbose:     false,
 			keepStaging: false,
 			retries:     retries,
@@ -428,16 +503,12 @@ func startWebServer(port int) {
 			outputDir:   outputDir,
 		}
 
-		sessionID := sanitizeModelName(opt.model)
+		opt.outZip = filepath.Join(opt.outputDir, outputName)
+		sessionID := sanitizeModelName(opt.outZip)
 		opt.sessionID = sessionID
-		zipName := sessionID
-		if !strings.HasSuffix(strings.ToLower(zipName), ".zip") {
-			zipName += ".zip"
-		}
-		opt.outZip = filepath.Join(opt.outputDir, zipName)
 		opt.stagingDir = filepath.Join(opt.outputDir, sessionID+".staging")
 
-		beginDownloadSession(opt, "در حال دانلود...")
+		beginDownloadSessionForURL(opt, downloadURL, "در حال دانلود...")
 
 		http.Redirect(w, r, "/", http.StatusFound)
 	})
