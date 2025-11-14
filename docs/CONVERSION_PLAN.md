@@ -81,6 +81,7 @@ Convert the Ollama-specific downloader into a flexible file downloader that acce
 ## Phase 2.5: Full-Fledged Download Manager Features
 
 ### 2.5.1 Multiple Concurrent Downloads
+
 - [ ] Queue management system (add, remove, reorder)
 - [ ] Support for multiple simultaneous downloads (configurable)
 - [ ] Priority system (high, normal, low)
@@ -90,6 +91,7 @@ Convert the Ollama-specific downloader into a flexible file downloader that acce
 - [ ] Visual queue display with status for each
 
 ### 2.5.2 Advanced Progress Tracking
+
 - [ ] Show download speed (KB/s, MB/s)
 - [ ] Calculate and display ETA (time remaining)
 - [ ] Show time elapsed
@@ -98,6 +100,7 @@ Convert the Ollama-specific downloader into a flexible file downloader that acce
 - [ ] Aggregate statistics for multiple downloads
 
 ### 2.5.3 Download History & Statistics
+
 - [ ] Track all completed downloads with timestamps
 - [ ] Show completion time for each download
 - [ ] Display total downloaded data (session and all-time)
@@ -107,6 +110,7 @@ Convert the Ollama-specific downloader into a flexible file downloader that acce
 - [ ] Delete history entries
 
 ### 2.5.4 Enhanced Form Controls
+
 - [ ] Batch URL input (paste multiple URLs at once)
 - [ ] URL validation with preview of filename/size
 - [ ] Drag & drop for URL input or file list
@@ -118,6 +122,7 @@ Convert the Ollama-specific downloader into a flexible file downloader that acce
 - [ ] Notification settings
 
 ### 2.5.5 Download Management UI
+
 - [ ] Tabs/sections: Active, Queue, Completed, History
 - [ ] Search/filter downloads by name or URL
 - [ ] Sort by: name, size, speed, date, status
@@ -128,6 +133,7 @@ Convert the Ollama-specific downloader into a flexible file downloader that acce
   - [ ] Open folder for selected
 
 ### 2.5.6 File Management
+
 - [ ] Show file size after header fetch
 - [ ] Confirm overwrite if file exists
 - [ ] Auto-rename on conflict (file.zip → file (1).zip)
@@ -137,6 +143,7 @@ Convert the Ollama-specific downloader into a flexible file downloader that acce
 - [ ] Calculate and display total disk space used
 
 ### 2.5.7 Advanced Download Options
+
 - [ ] Custom headers input (for protected URLs)
 - [ ] User-Agent selector (browser, custom)
 - [ ] Follow redirects (automatic, configurable)
@@ -146,6 +153,7 @@ Convert the Ollama-specific downloader into a flexible file downloader that acce
 - [ ] Filename pattern templates
 
 ### 2.5.8 UI/UX Enhancements
+
 - [ ] Dark/Light theme toggle
 - [ ] Responsive design for mobile/tablet
 - [ ] Keyboard shortcuts for common actions
@@ -158,6 +166,7 @@ Convert the Ollama-specific downloader into a flexible file downloader that acce
 - [ ] Accessibility improvements (ARIA labels, keyboard nav)
 
 ### 2.5.9 Status Indicators & Notifications
+
 - [ ] Color-coded status badges:
   - [ ] Green: Downloading/Active
   - [ ] Yellow: Paused
@@ -170,6 +179,7 @@ Convert the Ollama-specific downloader into a flexible file downloader that acce
 - [ ] Warning for slow connections
 
 ### 2.5.10 Settings Panel
+
 - [ ] Download folder selection
 - [ ] Default save location
 - [ ] Max concurrent downloads
@@ -182,6 +192,7 @@ Convert the Ollama-specific downloader into a flexible file downloader that acce
 - [ ] Cache/database cleanup
 
 ### 2.5.11 Search & Filtering
+
 - [ ] Search by filename or URL
 - [ ] Filter by status (active, paused, completed, error)
 - [ ] Filter by date range
@@ -190,6 +201,7 @@ Convert the Ollama-specific downloader into a flexible file downloader that acce
 - [ ] Save filters as presets
 
 ### 2.5.12 Download Statistics Dashboard
+
 - [ ] Total files downloaded (count & size)
 - [ ] Average download speed
 - [ ] Today's downloads vs this week vs all-time
@@ -312,17 +324,21 @@ type sessionMeta struct {
 ## Implementation Order
 
 ### Iteration 1: MVP (Minimum Viable Product)
+
 1. **Backend** (Phases 1, 3):
+
    - Create generic download logic
    - Update data structures
    - Get CLI working with URLs
 
 2. **Basic UI** (Phase 2.1-2.4):
+
    - Update form and labels
    - Basic progress display
    - Test web interface
 
 3. **Integration** (Phase 5):
+
    - Update session management
    - Test download flow
 
@@ -331,13 +347,16 @@ type sessionMeta struct {
    - Error handling refinement
 
 ### Iteration 2: Full-Featured Download Manager
+
 5. **Advanced Backend**:
+
    - Multi-download queue support
    - Download speed tracking
    - Bandwidth limiting
    - History/statistics persistence
 
 6. **Full-Featured UI** (Phase 2.5):
+
    - Queue management (Active, Queue, Completed, History tabs)
    - Advanced progress tracking (speed, ETA)
    - Bulk operations
@@ -363,6 +382,7 @@ type sessionMeta struct {
 ## Success Criteria
 
 ### MVP Phase (Iteration 1)
+
 - ✅ Download any HTTP/HTTPS file successfully
 - ✅ Show accurate progress percentage
 - ✅ Resume interrupted downloads
@@ -374,6 +394,7 @@ type sessionMeta struct {
 - ✅ Basic file management (delete, open folder)
 
 ### Full-Featured Phase (Iteration 2)
+
 - ✅ Multiple concurrent downloads with queue management
 - ✅ Download speed tracking (KB/s, MB/s)
 - ✅ ETA calculation and display

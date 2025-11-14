@@ -1,9 +1,11 @@
 # Step-by-Step Implementation Guide
 
 ## 🎯 Goal
+
 Convert Ollama Model Downloader → Full-Featured File Download Manager
 
 ## 📋 Prerequisites
+
 - ✅ Branch created: `feature/general-purpose-downloader`
 - ✅ Plans documented: See `CONVERSION_PLAN.md`, `ARCHITECTURE_OVERVIEW.md`
 - ✅ Current codebase understood
@@ -40,36 +42,36 @@ func downloadFile(ctx context.Context, downloadURL, outputPath string, p *progre
     if err != nil {
         return fmt.Errorf("invalid URL: %w", err)
     }
-    
+
     // 2. Create HTTP request with range support
     req, _ := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
-    
+
     // 3. Check if file partially exists
     info, _ := os.Stat(outputPath + ".part")
     if info != nil && info.Size() > 0 {
         req.Header.Set("Range", fmt.Sprintf("bytes=%d-", info.Size()))
     }
-    
+
     // 4. Make request
     resp, err := http.DefaultClient.Do(req)
     if err != nil {
         return fmt.Errorf("download failed: %w", err)
     }
     defer resp.Body.Close()
-    
+
     // 5. Create/open file
     f, err := os.OpenFile(outputPath+".part", os.O_CREATE|os.O_WRONLY, 0644)
     if err != nil {
         return err
     }
     defer f.Close()
-    
+
     // 6. Copy with progress
     written, err := io.Copy(io.MultiWriter(f, p), resp.Body)
     if err != nil {
         return fmt.Errorf("copy failed: %w", err)
     }
-    
+
     // 7. Rename on success
     return os.Rename(outputPath+".part", outputPath)
 }
@@ -80,12 +82,12 @@ func extractFilenameFromURL(urlStr string) string {
     if err != nil {
         return "download"
     }
-    
+
     path := filepath.Base(u.Path)
     if path == "" || path == "/" {
         return "download"
     }
-    
+
     return path
 }
 
@@ -95,26 +97,28 @@ func validateURL(urlStr string) error {
     if err != nil {
         return fmt.Errorf("invalid URL format: %w", err)
     }
-    
+
     if u.Scheme != "http" && u.Scheme != "https" {
         return fmt.Errorf("only HTTP/HTTPS supported, got %s", u.Scheme)
     }
-    
+
     if u.Host == "" {
         return fmt.Errorf("invalid URL: missing host")
     }
-    
+
     return nil
 }
 ```
 
 #### 1.2 Keep useful progress tracking code
+
 - Move `progress` struct to `progress.go` (already good as-is)
 - Keep `SpeedSample` structure for later
 
 #### 1.3 Update session metadata structure
 
 **In `main.go`, replace:**
+
 ```go
 type sessionMeta struct {
     Model       string
@@ -130,6 +134,7 @@ type sessionMeta struct {
 ```
 
 **With:**
+
 ```go
 type sessionMeta struct {
     URL          string    `json:"url"`
@@ -147,6 +152,7 @@ type sessionMeta struct {
 ```
 
 #### 1.4 Remove Ollama functions
+
 - [ ] Delete `parseModel()`
 - [ ] Delete `getRegistryToken()`
 - [ ] Delete `getManifestOrIndex()`
@@ -156,6 +162,7 @@ type sessionMeta struct {
 - [ ] Delete OCI/Docker constants
 
 **Checklist for deletion:**
+
 ```go
 // In download.go, remove these:
 ❌ const (mtOCIIndex, mtDockerIndex, mtOCIManifest, mtDockerManifest)
@@ -181,7 +188,7 @@ func main() {
     // Old:
     // flag.StringVar(&opt.registry, "registry", defaultRegistry, "...")
     // flag.StringVar(&opt.platform, "platform", defaultPlatform, "...")
-    
+
     // New:
     var url string
     flag.StringVar(&url, "url", "", "File URL to download")
@@ -191,7 +198,7 @@ func main() {
     flag.IntVar(&opt.port, "port", 0, "Web server port")
     flag.BoolVar(&opt.verbose, "v", false, "Verbose output")
     flag.Parse()
-    
+
     // Usage:
     // ./downloader https://example.com/file.zip
     // ./downloader -url https://example.com/file.zip -o myfile.zip
@@ -204,28 +211,32 @@ func main() {
 **File: `templates/index.html`**
 
 **Changes:**
+
 1. Update form input:
+
    ```html
    <!-- Old -->
-   <input name="model" placeholder="نام مدل (مثال: llama3.2)">
-   
+   <input name="model" placeholder="نام مدل (مثال: llama3.2)" />
+
    <!-- New -->
-   <input name="url" placeholder="آدرس دانلود (مثال: https://...)">
-   <input name="filename" placeholder="نام فایل (اختیاری)">
+   <input name="url" placeholder="آدرس دانلود (مثال: https://...)" />
+   <input name="filename" placeholder="نام فایل (اختیاری)" />
    ```
 
 2. Remove platform/registry/concurrency fields:
+
    ```html
    <!-- Remove -->
-   <input name="platform">
-   <input name="registry">
-   <input name="concurrency">
-   
+   <input name="platform" />
+   <input name="registry" />
+   <input name="concurrency" />
+
    <!-- Keep only -->
-   <input name="retries">
+   <input name="retries" />
    ```
 
 3. Update labels:
+
    ```
    "مدیریت دانلود مدل‌های Ollama" → "مدیریت دانلود فایل‌ها"
    "دانلود مدل جدید" → "دانلود فایل جدید"
@@ -233,10 +244,11 @@ func main() {
    ```
 
 4. Update session display:
+
    ```html
    <!-- Old -->
    <h3>{{.RunningSession.Model}}</h3>
-   
+
    <!-- New -->
    <h3>{{.RunningSession.Filename}} - {{.RunningSession.URL}}</h3>
    ```
@@ -250,18 +262,18 @@ http.HandleFunc("/download", func(w http.ResponseWriter, r *http.Request) {
     // Parse form
     downloadURL := r.FormValue("url")
     filename := r.FormValue("filename")
-    
+
     // Validate URL
     if err := validateURL(downloadURL); err != nil {
         http.Error(w, err.Error(), http.StatusBadRequest)
         return
     }
-    
+
     // Extract filename if not provided
     if filename == "" {
         filename = extractFilenameFromURL(downloadURL)
     }
-    
+
     // Create options
     opt := options{
         url:        downloadURL,
@@ -271,7 +283,7 @@ http.HandleFunc("/download", func(w http.ResponseWriter, r *http.Request) {
         stagingDir: filepath.Join(opt.outputDir, sanitizeModelName(filename)+".staging"),
         retries:    retries,
     }
-    
+
     // Start download
     beginDownloadSession(opt, "در حال دانلود...")
     http.Redirect(w, r, "/", http.StatusFound)
@@ -281,6 +293,7 @@ http.HandleFunc("/download", func(w http.ResponseWriter, r *http.Request) {
 ### Step 5: Testing MVP (2-3 hours)
 
 **Checklist:**
+
 - [ ] Start web server: `go run . -port 8080`
 - [ ] Download small file (100MB)
   - [ ] Check progress updates
@@ -369,7 +382,7 @@ func NewDownloadManager(maxConcurrent int) *DownloadManager {
 
 func (dm *DownloadManager) AddDownload(url, filename, outputPath string) string {
     id := generateID()  // dl-<timestamp>-<random>
-    
+
     dl := &Download{
         ID:         id,
         URL:        url,
@@ -379,53 +392,53 @@ func (dm *DownloadManager) AddDownload(url, filename, outputPath string) string 
         StartTime:  time.Now(),
         Priority:   5,  // Default medium priority
     }
-    
+
     dm.mu.Lock()
     dm.downloads[id] = dl
     dm.queue = append(dm.queue, id)
     dm.mu.Unlock()
-    
+
     dm.processQueue()
     return id
 }
 
 func (dm *DownloadManager) processQueue() {
     dm.mu.Lock()
-    
+
     // Check how many are currently running
     activeCount := len(dm.running)
-    
+
     // Start new downloads up to maxConcurrent
     for _, id := range dm.queue {
         if activeCount >= dm.maxConcurrent {
             break
         }
-        
+
         dl := dm.downloads[id]
         if dl.Status == "queued" {
             dl.Status = "active"
             dm.running = append(dm.running, id)
             activeCount++
-            
+
             // Start goroutine
             dm.wg.Add(1)
             go dm.downloadWorker(id)
         }
     }
-    
+
     dm.mu.Unlock()
 }
 
 func (dm *DownloadManager) downloadWorker(id string) {
     defer dm.wg.Done()
-    
+
     dm.mu.RLock()
     dl := dm.downloads[id]
     dm.mu.RUnlock()
-    
+
     // Perform actual download
     err := downloadFile(dm.ctx, dl.URL, dl.OutputPath, nil)
-    
+
     dm.mu.Lock()
     if err != nil {
         dl.Status = "error"
@@ -434,7 +447,7 @@ func (dm *DownloadManager) downloadWorker(id string) {
         dl.Status = "completed"
         dl.CompletedTime = time.Now()
     }
-    
+
     // Remove from running
     for i, rid := range dm.running {
         if rid == id {
@@ -442,9 +455,9 @@ func (dm *DownloadManager) downloadWorker(id string) {
             break
         }
     }
-    
+
     dm.mu.Unlock()
-    
+
     // Process next in queue
     dm.processQueue()
 }
@@ -452,12 +465,12 @@ func (dm *DownloadManager) downloadWorker(id string) {
 func (dm *DownloadManager) Pause(id string) error {
     dm.mu.Lock()
     defer dm.mu.Unlock()
-    
+
     dl, exists := dm.downloads[id]
     if !exists {
         return fmt.Errorf("download not found")
     }
-    
+
     dl.Status = "paused"
     return nil
 }
@@ -465,15 +478,15 @@ func (dm *DownloadManager) Pause(id string) error {
 func (dm *DownloadManager) Resume(id string) error {
     dm.mu.Lock()
     defer dm.mu.Unlock()
-    
+
     dl, exists := dm.downloads[id]
     if !exists {
         return fmt.Errorf("download not found")
     }
-    
+
     dl.Status = "queued"
     dm.mu.Unlock()
-    
+
     dm.processQueue()
     return nil
 }
@@ -481,7 +494,7 @@ func (dm *DownloadManager) Resume(id string) error {
 func (dm *DownloadManager) GetAll() []*Download {
     dm.mu.RLock()
     defer dm.mu.RUnlock()
-    
+
     result := make([]*Download, 0, len(dm.downloads))
     for _, dl := range dm.downloads {
         result = append(result, dl)
@@ -492,7 +505,7 @@ func (dm *DownloadManager) GetAll() []*Download {
 func (dm *DownloadManager) GetStatistics() Statistics {
     dm.mu.RLock()
     defer dm.mu.RUnlock()
-    
+
     var stats Statistics
     for _, dl := range dm.downloads {
         if dl.Status == "completed" {
@@ -501,11 +514,11 @@ func (dm *DownloadManager) GetStatistics() Statistics {
             stats.TotalTime += int64(dl.CompletedTime.Sub(dl.StartTime).Seconds())
         }
     }
-    
+
     if stats.TotalTime > 0 {
         stats.AverageSpeed = stats.TotalBytes / stats.TotalTime
     }
-    
+
     return stats
 }
 ```
@@ -541,12 +554,12 @@ func NewSpeedTracker() *SpeedTracker {
 func (st *SpeedTracker) Record(bytes int64) {
     st.mu.Lock()
     defer st.mu.Unlock()
-    
+
     st.samples = append(st.samples, &SpeedSample{
         timestamp: time.Now(),
         bytes:     bytes,
     })
-    
+
     // Keep only last 10 samples (10 seconds at 1/sec)
     if len(st.samples) > 10 {
         st.samples = st.samples[1:]
@@ -556,19 +569,19 @@ func (st *SpeedTracker) Record(bytes int64) {
 func (st *SpeedTracker) GetSpeed() int64 {
     st.mu.RLock()
     defer st.mu.RUnlock()
-    
+
     if len(st.samples) < 2 {
         return 0
     }
-    
+
     first := st.samples[0]
     last := st.samples[len(st.samples)-1]
-    
+
     timeDiff := last.timestamp.Sub(first.timestamp).Seconds()
     if timeDiff == 0 {
         return 0
     }
-    
+
     bytesDiff := last.bytes - first.bytes
     return int64(float64(bytesDiff) / timeDiff)
 }
@@ -578,7 +591,7 @@ func (st *SpeedTracker) GetETA(total, downloaded int64) time.Duration {
     if speed <= 0 {
         return 0
     }
-    
+
     remaining := total - downloaded
     seconds := remaining / speed
     return time.Duration(seconds) * time.Second
@@ -640,7 +653,7 @@ func NewHistoryManager(dir string) *HistoryManager {
 func (hm *HistoryManager) Load() error {
     hm.mu.Lock()
     defer hm.mu.Unlock()
-    
+
     data, err := os.ReadFile(hm.file)
     if err != nil {
         if os.IsNotExist(err) {
@@ -648,7 +661,7 @@ func (hm *HistoryManager) Load() error {
         }
         return err
     }
-    
+
     return json.Unmarshal(data, &hm.entries)
 }
 
@@ -656,54 +669,54 @@ func (hm *HistoryManager) AddEntry(entry *HistoryEntry) error {
     hm.mu.Lock()
     hm.entries = append(hm.entries, entry)
     hm.mu.Unlock()
-    
+
     return hm.Save()
 }
 
 func (hm *HistoryManager) Save() error {
     hm.mu.RLock()
     defer hm.mu.RUnlock()
-    
+
     data, err := json.MarshalIndent(hm.entries, "", "  ")
     if err != nil {
         return err
     }
-    
+
     return os.WriteFile(hm.file, data, 0644)
 }
 
 func (hm *HistoryManager) GetStatistics() Statistics {
     hm.mu.RLock()
     defer hm.mu.RUnlock()
-    
+
     stats := Statistics{
         TopDomains:    make(map[string]int64),
         FileTypeStats: make(map[string]int64),
     }
-    
+
     now := time.Now()
     today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-    
+
     for _, entry := range hm.entries {
         if entry.Status == "completed" {
             stats.TotalFiles++
             stats.TotalBytes += entry.FileSize
             stats.TotalTime += entry.Duration
-            
+
             if entry.DownloadedAt.After(today) {
                 stats.TodayFiles++
                 stats.TodayBytes += entry.FileSize
             }
-            
+
             // Extract domain from URL
             // Extract extension for file type
         }
     }
-    
+
     if stats.TotalTime > 0 {
         stats.AverageSpeed = stats.TotalBytes / stats.TotalTime
     }
-    
+
     return stats
 }
 ```
@@ -730,9 +743,9 @@ http.HandleFunc("/api/downloads", func(w http.ResponseWriter, r *http.Request) {
 http.HandleFunc("/api/download/add", func(w http.ResponseWriter, r *http.Request) {
     url := r.FormValue("url")
     filename := r.FormValue("filename")
-    
+
     id := downloadMgr.AddDownload(url, filename, outputPath)
-    
+
     w.Header().Set("Content-Type", "application/json")
     json.NewEncoder(w).Encode(map[string]string{"id": id})
 })
@@ -756,6 +769,7 @@ http.HandleFunc("/api/download/pause", func(w http.ResponseWriter, r *http.Reque
 **File: `templates/index.html` - Add tabs and sections**
 
 **Changes:**
+
 1. Add "Completed" and "History" tabs
 2. Add speed/ETA display in active tab
 3. Add bulk operations toolbar
@@ -765,48 +779,49 @@ http.HandleFunc("/api/download/pause", func(w http.ResponseWriter, r *http.Reque
 ```html
 <!-- New tab structure -->
 <div class="tabs">
-    <button onclick="switchTab('active')">Active (1)</button>
-    <button onclick="switchTab('queue')">Queue (3)</button>
-    <button onclick="switchTab('completed')">Completed (45)</button>
-    <button onclick="switchTab('history')">History</button>
+  <button onclick="switchTab('active')">Active (1)</button>
+  <button onclick="switchTab('queue')">Queue (3)</button>
+  <button onclick="switchTab('completed')">Completed (45)</button>
+  <button onclick="switchTab('history')">History</button>
 </div>
 
 <!-- Active tab - with speed/ETA -->
 <div id="tab-active">
-    <div class="download-card">
-        <h3>large-file.zip</h3>
-        <p>Speed: 2.5 MB/s ↓ | ETA: 5m 30s</p>
-        <div class="progress">
-            <div class="bar" style="width: 43%"></div>
-        </div>
-        <p>524 MB / 1.2 GB (43%)</p>
+  <div class="download-card">
+    <h3>large-file.zip</h3>
+    <p>Speed: 2.5 MB/s ↓ | ETA: 5m 30s</p>
+    <div class="progress">
+      <div class="bar" style="width: 43%"></div>
     </div>
+    <p>524 MB / 1.2 GB (43%)</p>
+  </div>
 </div>
 
 <!-- Completed tab -->
 <div id="tab-completed">
-    <table>
-        <tr>
-            <td>file1.zip</td>
-            <td>234 MB</td>
-            <td>Completed in 2m 15s</td>
-        </tr>
-    </table>
+  <table>
+    <tr>
+      <td>file1.zip</td>
+      <td>234 MB</td>
+      <td>Completed in 2m 15s</td>
+    </tr>
+  </table>
 </div>
 
 <!-- History tab with search -->
 <div id="tab-history">
-    <input type="text" placeholder="Search history...">
-    <div class="stats-widget">
-        <p>Total: 45 files, 125 GB</p>
-        <p>Average speed: 5.2 MB/s</p>
-    </div>
+  <input type="text" placeholder="Search history..." />
+  <div class="stats-widget">
+    <p>Total: 45 files, 125 GB</p>
+    <p>Average speed: 5.2 MB/s</p>
+  </div>
 </div>
 ```
 
 ### Step 12: Testing Manager Features (3-4 hours)
 
 **Test Cases:**
+
 - [ ] Add 5 URLs at once to queue
 - [ ] Verify proper queuing and ordering
 - [ ] Pause individual download
@@ -822,6 +837,7 @@ http.HandleFunc("/api/download/pause", func(w http.ResponseWriter, r *http.Reque
 ### Step 13: Final Polish & Commit (2 hours)
 
 **Cleanup:**
+
 - [ ] Remove debug logs
 - [ ] Update error messages
 - [ ] Test error cases
@@ -853,6 +869,7 @@ git commit -m "feat: implement full-featured download manager
 After each phase, verify:
 
 ### After MVP Phase
+
 ```
 ✅ Single file downloads work
 ✅ Pause/Resume functionality
@@ -865,6 +882,7 @@ After each phase, verify:
 ```
 
 ### After Manager Phase
+
 ```
 ✅ Multiple downloads in queue
 ✅ Speed tracking works
@@ -923,20 +941,20 @@ watch 'ps aux | grep downloader'
 
 ## ⏱️ Time Estimates
 
-| Phase | Duration | Effort |
-|-------|----------|--------|
-| MVP Backend | 3-5 hours | Medium |
-| MVP UI | 2-3 hours | Medium |
-| MVP Testing | 3-4 hours | High |
-| MVP Subtotal | **8-12 hours** | |
-| | | |
-| Manager Backend | 6-8 hours | High |
-| Manager UI | 4-5 hours | Medium |
-| Manager Testing | 4-5 hours | High |
-| Manager Polish | 2-3 hours | Low |
-| Manager Subtotal | **16-21 hours** | |
-| | | |
-| **Total** | **24-33 hours** | |
+| Phase            | Duration        | Effort |
+| ---------------- | --------------- | ------ |
+| MVP Backend      | 3-5 hours       | Medium |
+| MVP UI           | 2-3 hours       | Medium |
+| MVP Testing      | 3-4 hours       | High   |
+| MVP Subtotal     | **8-12 hours**  |        |
+|                  |                 |        |
+| Manager Backend  | 6-8 hours       | High   |
+| Manager UI       | 4-5 hours       | Medium |
+| Manager Testing  | 4-5 hours       | High   |
+| Manager Polish   | 2-3 hours       | Low    |
+| Manager Subtotal | **16-21 hours** |        |
+|                  |                 |        |
+| **Total**        | **24-33 hours** |        |
 
 Estimate: **3-4 working days** for MVP, **2-3 additional days** for Manager
 
@@ -975,6 +993,7 @@ A: Out of scope for now. Can be added as Phase 3 later.
 ## ✨ Success
 
 You'll know you're done when:
+
 1. You can download any HTTP/HTTPS file
 2. You can pause and resume
 3. You can manage multiple downloads

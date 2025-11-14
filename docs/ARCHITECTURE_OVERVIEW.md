@@ -284,7 +284,7 @@ User Actions (Pause/Resume/Delete/Bulk Ops)
        │      │
        ↓      └─→ Cancelled
        [back to Downloading]
-       
+
     Downloading ──→ [Complete] → Completed
               ──→ [Error] → Error → [Retry?] → Downloading
 ```
@@ -331,6 +331,7 @@ Complete/Error
 ## File Organization After Conversion
 
 ### MVP Phase
+
 ```
 ollama-model-downloader/
 ├── main.go                 (simplified, generic handlers)
@@ -344,6 +345,7 @@ ollama-model-downloader/
 ```
 
 ### Manager Phase
+
 ```
 ollama-model-downloader/
 ├── main.go                 (updated with API routes)
@@ -367,12 +369,14 @@ ollama-model-downloader/
 ## Performance Targets
 
 ### MVP
+
 - Single download: Minimal overhead
 - Progress updates: 1 per second
 - Memory: < 50 MB
 - CPU: < 5% idle
 
 ### Manager
+
 - Multiple downloads: Negligible per-download overhead
 - Progress updates: 1 per second per download
 - Memory: < 200 MB (with 10+ downloads)
