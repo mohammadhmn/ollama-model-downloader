@@ -577,7 +577,7 @@ func startWebServer(port int) {
 	addr := fmt.Sprintf(":%d", bindPort)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
-		fmt.Printf("پورت %d در دسترس نیست، استفاده از پورت تصادفی...\n", bindPort)
+		fmt.Printf("Port %d not available, using random port...\n", bindPort)
 		listener, err = net.Listen("tcp", ":0")
 		if err != nil {
 			fmt.Println("Error starting server:", err)
