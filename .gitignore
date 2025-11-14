@@ -41,4 +41,5 @@ ollama-staging-*/
 
 # Downloaded model files
 *.zip
-downloaded-models/
+downloaded-models/.claude/
+.gocache/
