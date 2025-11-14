@@ -37,7 +37,7 @@ func Parse() (*Config, error) {
 	defaultPlatform := fmt.Sprintf("linux/%s", archFromGo(runtime.GOARCH))
 	flag.StringVar(&cfg.Platform, "platform", defaultPlatform, "target platform (linux/amd64 or linux/arm64)")
 	flag.StringVar(&cfg.OutputDir, "output-dir", "downloaded-models", "directory to save downloaded models")
-	flag.IntVar(&cfg.Port, "port", 0, "port to listen on (0 for random)")
+	flag.IntVar(&cfg.Port, "port", 5050, "port to listen on (5050 by default, 0 for random)")
 
 	flag.Parse()
 

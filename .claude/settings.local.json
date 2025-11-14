@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go build -o ollama-model-downloader)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -1,330 +1,619 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Ollama Model Download Manager</title>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>مدیریت دانلود مدل‌های Ollama</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@200;400;500;700;900&display=swap"
+      rel="stylesheet"
+    />
     <style>
-        :root {
-            font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
-            color: #0f172a;
-            background: #f8fafc;
+      :root {
+        --bg-dark: #0f172a;
+        --bg-panel: #1e293b;
+        --bg-card: #0f172a;
+        --text-primary: #e2e8f0;
+        --text-secondary: #94a3b8;
+        --accent: #38bdf8;
+        --accent-hover: #7dd3fc;
+        --success: #10b981;
+        --warning: #f59e0b;
+        --error: #ef4444;
+        --border: rgba(148, 163, 184, 0.2);
+        --font-family: "Vazirmatn", -apple-system, BlinkMacSystemFont,
+          "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family: var(--font-family);
+      }
+
+      body {
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        color: var(--text-primary);
+        min-height: 100vh;
+        padding: 2rem;
+      }
+
+      .container {
+        max-width: 1400px;
+        margin: 0 auto;
+      }
+
+      header {
+        text-align: center;
+        margin-bottom: 2.5rem;
+      }
+
+      h1 {
+        font-size: 2.5rem;
+        font-weight: 900;
+        margin-bottom: 0.5rem;
+        background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      .subtitle {
+        color: var(--text-secondary);
+        font-size: 1rem;
+      }
+
+      .message {
+        background: var(--success);
+        color: var(--bg-dark);
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin: 1rem auto;
+        max-width: 1400px;
+        font-weight: 700;
+        text-align: center;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1.5fr 1fr;
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+      }
+
+      @media (max-width: 1024px) {
+        .grid {
+          grid-template-columns: 1fr;
         }
-        body {
-            margin: 0;
-            background: #0f172a;
-            color: #e2e8f0;
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            padding: 2rem;
-        }
-        .page {
-            width: min(1200px, 100%);
-        }
-        header {
-            margin-bottom: 1.5rem;
-        }
-        header h1 {
-            margin: 0;
-            font-size: 2rem;
-        }
-        header p {
-            margin: 0.25rem 0;
-            color: #94a3b8;
-        }
-        .flash {
-            margin-top: 0.75rem;
-            padding: 0.6rem 1rem;
-            background: #22c55e;
-            color: #0f172a;
-            border-radius: 0.5rem;
-            font-weight: 600;
-        }
-        .panels {
-            display: grid;
-            grid-template-columns: minmax(260px, 1fr) minmax(360px, 1.3fr) minmax(240px, 0.9fr);
-            gap: 1rem;
-        }
-        .panel {
-            background: #1e293b;
-            border-radius: 1rem;
-            padding: 1.2rem;
-            box-shadow: 0 20px 60px rgba(15, 23, 42, 0.35);
-            border: 1px solid rgba(148, 163, 184, 0.2);
-        }
-        .panel h2 {
-            margin-top: 0;
-            margin-bottom: 0.8rem;
-            font-size: 1.2rem;
-        }
-        .panel ul {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-        .panel li {
-            padding: 0.8rem 0;
-            border-bottom: 1px dashed rgba(148, 163, 184, 0.3);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .panel li:last-child {
-            border-bottom: none;
-        }
-        .panel li strong {
-            font-size: 1rem;
-        }
-        .panel .meta {
-            font-size: 0.9rem;
-            color: #cbd5f5;
-        }
-        .link {
-            color: #38bdf8;
-            text-decoration: none;
-            font-weight: 600;
-            transition: color 0.2s ease;
-        }
-        .link:hover {
-            color: #7dd3fc;
-        }
-        .queue-card {
-            background: #0f172a;
-            border-radius: 0.8rem;
-            padding: 1rem;
-            margin-bottom: 1rem;
-            border: 1px solid rgba(148, 163, 184, 0.25);
-        }
-        .queue-card:last-child {
-            margin-bottom: 0;
-        }
-        .queue-card .queue-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 0.6rem;
-        }
-        .queue-card .state {
-            font-size: 0.8rem;
-            color: #bfdbfe;
-            margin-top: 0.2rem;
-        }
-        .queue-card .zip-name {
-            font-size: 0.85rem;
-            color: #94a3b8;
-            text-align: right;
-        }
-        .progress {
-            margin: 0.6rem 0;
-        }
-        .progress-bar {
-            width: 100%;
-            height: 6px;
-            background: rgba(148, 163, 184, 0.2);
-            border-radius: 999px;
-            overflow: hidden;
-        }
-        .progress-bar div {
-            height: 100%;
-            background: linear-gradient(90deg, #38bdf8, #0ea5e9);
-            border-radius: inherit;
-            width: 0%;
-            transition: width 0.2s ease;
-        }
-        .progress-label {
-            display: block;
-            margin-top: 0.35rem;
-            font-size: 0.85rem;
-            color: #e2e8f0;
-        }
-        .message {
-            margin: 0.2rem 0 0.8rem;
-            font-size: 0.9rem;
-            color: #fbbf24;
-        }
-        .actions {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.4rem;
-        }
-        .actions form {
-            margin: 0;
-        }
-        .actions button {
-            border: none;
-            background: #38bdf8;
-            padding: 0.45rem 0.9rem;
-            border-radius: 0.6rem;
-            color: #0f172a;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background 0.2s ease;
-        }
-        .actions button:hover {
-            background: #7dd3fc;
-        }
-        .timestamps {
-            margin-top: 0.6rem;
-            font-size: 0.8rem;
-            color: #94a3b8;
-            display: flex;
-            justify-content: space-between;
-        }
-        .state-running {
-            border-color: rgba(56, 189, 248, 0.6);
-        }
-        .state-paused {
-            border-color: rgba(239, 68, 68, 0.6);
-        }
-        .state-error {
-            border-color: rgba(248, 113, 113, 0.6);
-        }
-        .state-done {
-            border-color: rgba(16, 185, 129, 0.6);
-        }
-        .state-canceled {
-            border-color: rgba(248, 113, 113, 0.4);
-        }
-        .form-panel .add-form {
-            display: flex;
-            flex-direction: column;
-            gap: 0.6rem;
-        }
-        .form-panel input {
-            padding: 0.75rem;
-            border-radius: 0.7rem;
-            border: 1px solid rgba(148, 163, 184, 0.4);
-            background: #0f172a;
-            color: #e2e8f0;
-            font-size: 0.95rem;
-        }
-        .form-panel button {
-            border: none;
-            background: #38bdf8;
-            padding: 0.75rem;
-            border-radius: 0.7rem;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            color: #0f172a;
-        }
-        .form-panel button:hover {
-            background: #7dd3fc;
-        }
-        .hint {
-            margin: 0.5rem 0 0;
-            color: #94a3b8;
-            font-size: 0.8rem;
-        }
-        .empty {
-            color: #94a3b8;
-            font-size: 0.9rem;
-            padding: 0.6rem 0;
-        }
-        @media (max-width: 960px) {
-            .panels {
-                grid-template-columns: 1fr;
-            }
-        }
+      }
+
+      .panel {
+        background: var(--bg-panel);
+        border-radius: 1rem;
+        padding: 1.5rem;
+        border: 1px solid var(--border);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+      }
+
+      .panel-title {
+        font-size: 1.25rem;
+        font-weight: 700;
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .panel-title svg {
+        width: 20px;
+        height: 20px;
+      }
+
+      /* Downloads List */
+      .download-item {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        padding: 1rem;
+        margin-bottom: 0.75rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        transition: all 0.2s ease;
+      }
+
+      .download-item:hover {
+        border-color: var(--accent);
+        transform: translateY(-2px);
+      }
+
+      .download-item:last-child {
+        margin-bottom: 0;
+      }
+
+      .model-info {
+        flex: 1;
+      }
+
+      .model-name {
+        font-weight: 700;
+        font-size: 1rem;
+        color: var(--text-primary);
+        margin-bottom: 0.25rem;
+      }
+
+      .model-meta {
+        font-size: 0.875rem;
+        color: var(--text-secondary);
+      }
+
+      .download-link {
+        background: var(--accent);
+        color: var(--bg-dark);
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
+        text-decoration: none;
+        font-weight: 700;
+        font-size: 0.875rem;
+        transition: all 0.2s ease;
+      }
+
+      .download-link:hover {
+        background: var(--accent-hover);
+        transform: scale(1.05);
+      }
+
+      .empty {
+        text-align: center;
+        color: var(--text-secondary);
+        padding: 2rem;
+        font-style: italic;
+      }
+
+      /* Queue */
+      .queue-item {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        padding: 1.25rem;
+        margin-bottom: 1rem;
+        transition: all 0.2s ease;
+      }
+
+      .queue-item:last-child {
+        margin-bottom: 0;
+      }
+
+      .queue-item.state-downloading {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 1px var(--accent);
+      }
+
+      .queue-item.state-paused {
+        border-color: var(--warning);
+        opacity: 0.8;
+      }
+
+      .queue-item.state-error {
+        border-color: var(--error);
+      }
+
+      .queue-item.state-done {
+        border-color: var(--success);
+        opacity: 0.9;
+      }
+
+      .queue-item.state-canceled {
+        opacity: 0.6;
+      }
+
+      .queue-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 0.75rem;
+      }
+
+      .queue-title {
+        flex: 1;
+      }
+
+      .queue-model {
+        font-weight: 700;
+        font-size: 1.1rem;
+        margin-bottom: 0.25rem;
+      }
+
+      .queue-state {
+        font-size: 0.875rem;
+        color: var(--text-secondary);
+      }
+
+      .queue-id {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        font-family: monospace;
+      }
+
+      .progress-section {
+        margin: 1rem 0;
+      }
+
+      .progress-bar {
+        width: 100%;
+        height: 8px;
+        background: rgba(148, 163, 184, 0.2);
+        border-radius: 999px;
+        overflow: hidden;
+        margin-bottom: 0.5rem;
+      }
+
+      .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, var(--accent), var(--accent-hover));
+        border-radius: inherit;
+        transition: width 0.3s ease;
+      }
+
+      .progress-text {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.875rem;
+        color: var(--text-secondary);
+      }
+
+      .queue-message {
+        margin: 0.5rem 0;
+        color: var(--warning);
+        font-size: 0.875rem;
+      }
+
+      .queue-actions {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+      }
+
+      .btn {
+        padding: 0.5rem 1rem;
+        border: none;
+        border-radius: 0.5rem;
+        font-weight: 700;
+        font-size: 0.875rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+      }
+
+      .btn:hover {
+        transform: translateY(-1px);
+      }
+
+      .btn-primary {
+        background: var(--accent);
+        color: var(--bg-dark);
+      }
+
+      .btn-primary:hover {
+        background: var(--accent-hover);
+      }
+
+      .btn-warning {
+        background: var(--warning);
+        color: var(--bg-dark);
+      }
+
+      .btn-warning:hover {
+        opacity: 0.9;
+      }
+
+      .btn-danger {
+        background: var(--error);
+        color: white;
+      }
+
+      .btn-danger:hover {
+        opacity: 0.9;
+      }
+
+      .btn-success {
+        background: var(--success);
+        color: var(--bg-dark);
+      }
+
+      .btn-success:hover {
+        opacity: 0.9;
+      }
+
+      .btn-secondary {
+        background: rgba(148, 163, 184, 0.2);
+        color: var(--text-primary);
+      }
+
+      .btn-secondary:hover {
+        background: rgba(148, 163, 184, 0.3);
+      }
+
+      .timestamps {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        margin-top: 0.75rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid var(--border);
+      }
+
+      /* Add Form */
+      .add-form {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+
+      .form-label {
+        font-size: 0.875rem;
+        font-weight: 700;
+        color: var(--text-secondary);
+      }
+
+      .form-input {
+        padding: 0.75rem;
+        border-radius: 0.5rem;
+        border: 1px solid var(--border);
+        background: var(--bg-card);
+        color: var(--text-primary);
+        font-size: 1rem;
+        transition: all 0.2s ease;
+      }
+
+      .form-input:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.1);
+      }
+
+      .form-hint {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        font-style: italic;
+      }
+
+      .btn-add {
+        background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+        color: var(--bg-dark);
+        padding: 0.875rem;
+        border: none;
+        border-radius: 0.5rem;
+        font-size: 1rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        width: 100%;
+      }
+
+      .btn-add:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(56, 189, 248, 0.3);
+      }
     </style>
-</head>
-<body>
-<div class="page">
-    <header>
-        <h1>Ollama Model Download Manager</h1>
-        <p>Manage downloads, pause/resume work, and queue new models.</p>
-        {{if .Message}}<p class="flash">{{.Message}}</p>{{end}}
-    </header>
-    <div class="panels">
-        <article class="panel downloads">
-            <h2>Downloaded models</h2>
-            <ul>
-                {{range .Downloads}}
-                <li>
-                    <div>
-                        <strong>{{.Model}}</strong>
-                        <div class="meta">File: {{.Name}}</div>
-                        <div class="meta">{{formatTime .ModTime}}</div>
-                    </div>
-                    <a class="link" href="/download/{{.Name}}">Download</a>
-                </li>
-                {{else}}
-                <p class="empty">No completed downloads yet.</p>
-                {{end}}
-            </ul>
-        </article>
-        <article class="panel queue">
-            <h2>Download queue</h2>
-            {{range .Queue}}
-            <div class="queue-card {{.StateClass}}">
-                <div class="queue-header">
-                    <div>
-                        <strong>{{.Model}}</strong>
-                        <div class="state">{{.StateLabel}}</div>
-                    </div>
-                    <div class="zip-name">{{.ZipName}}</div>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>
+          <svg
+            style="
+              display: inline;
+              width: 2rem;
+              height: 2rem;
+              vertical-align: middle;
+              margin-left: 0.5rem;
+            "
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+            ></path>
+          </svg>
+          Ollama Model Downloader
+        </h1>
+      </header>
+
+      {{if .Message}}
+      <div class="message">{{.Message}}</div>
+      {{end}}
+
+      <div class="grid">
+        <!-- Downloaded Models -->
+        <section class="panel">
+          <h2 class="panel-title">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+              ></path>
+            </svg>
+            مدل‌های دانلود شده
+          </h2>
+          {{if .Downloads}}
+          <div>
+            {{range .Downloads}}
+            <div class="download-item">
+              <div class="model-info">
+                <div class="model-name">{{.Model}}</div>
+                <div class="model-meta">
+                  {{.Name}} • {{formatTime .ModTime}}
                 </div>
-                <div class="progress">
-                    <div class="progress-bar">
-                        <div style="width: {{.Percent}}%"></div>
-                    </div>
-                    <span class="progress-label">
-                        {{if gt .Total 0}}{{.Percent}}% ({{humanBytes .Done}} / {{humanBytes .Total}}){{else}}Waiting for metadata...{{end}}
-                    </span>
-                </div>
-                {{if .Message}}<p class="message">{{.Message}}</p>{{end}}
-                <div class="actions">
-                    {{if eq .State "downloading"}}
-                    <form method="post" action="/queue/action">
-                        <input type="hidden" name="id" value="{{.ID}}">
-                        <input type="hidden" name="action" value="pause">
-                        <button type="submit">Pause</button>
-                    </form>
-                    <form method="post" action="/queue/action">
-                        <input type="hidden" name="id" value="{{.ID}}">
-                        <input type="hidden" name="action" value="cancel">
-                        <button type="submit">Cancel</button>
-                    </form>
-                    {{else if or (eq .State "paused") (eq .State "error") (eq .State "canceled")}}
-                    <form method="post" action="/queue/action">
-                        <input type="hidden" name="id" value="{{.ID}}">
-                        <input type="hidden" name="action" value="resume">
-                        <button type="submit">Resume</button>
-                    </form>
-                    <form method="post" action="/queue/action">
-                        <input type="hidden" name="id" value="{{.ID}}">
-                        <input type="hidden" name="action" value="cancel">
-                        <button type="submit">Cancel</button>
-                    </form>
-                    {{else if eq .State "queued"}}
-                    <form method="post" action="/queue/action">
-                        <input type="hidden" name="id" value="{{.ID}}">
-                        <input type="hidden" name="action" value="cancel">
-                        <button type="submit">Cancel</button>
-                    </form>
-                    {{else if eq .State "done"}}
-                    <a class="link" href="/download/{{.ZipName}}">Download ZIP</a>
-                    {{end}}
-                </div>
-                <div class="timestamps">
-                    <small>Created: {{.CreatedAt}}</small>
-                    <small>Updated: {{.UpdatedAt}}</small>
-                </div>
+              </div>
+              <a href="/download/{{.Name}}" class="download-link">دانلود</a>
             </div>
-            {{else}}
-            <p class="empty">The queue is empty right now.</p>
             {{end}}
-        </article>
-        <article class="panel form-panel">
-            <h2>Add to queue</h2>
-            <form class="add-form" action="/queue/add" method="post">
-                <input name="model" placeholder="model[:tag] or model@sha256:..." required autocomplete="off">
-                <button type="submit">Queue model</button>
-            </form>
-            <p class="hint">Supported references: <code>name[:tag]</code>, <code>owner/name[:tag]</code>, or <code>model@sha256:digest</code>.</p>
-        </article>
+          </div>
+          {{else}}
+          <div class="empty">هنوز دانلودی انجام نشده</div>
+          {{end}}
+        </section>
+
+        <!-- Download Queue -->
+        <section class="panel">
+          <h2 class="panel-title">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+              ></path>
+            </svg>
+            صف دانلود
+          </h2>
+          {{if .Queue}}
+          <div>
+            {{range .Queue}}
+            <div class="queue-item state-{{.StateClass}}">
+              <div class="queue-header">
+                <div class="queue-id">{{.ID}}</div>
+                <div class="queue-title">
+                  <div class="queue-state">{{.StateLabel}}</div>
+                  <div class="queue-model">{{.Model}}</div>
+                </div>
+              </div>
+
+              {{if gt .Total 0}}
+              <div class="progress-section">
+                <div class="progress-bar">
+                  <div class="progress-fill" style="width: {{.Percent}}%"></div>
+                </div>
+                <div class="progress-text">
+                  <span>{{.Percent}}%</span>
+                  <span>{{humanBytes .Done}} / {{humanBytes .Total}}</span>
+                </div>
+              </div>
+              {{end}} {{if .Message}}
+              <div class="queue-message">{{.Message}}</div>
+              {{end}}
+
+              <div class="queue-actions">
+                {{if eq .State "downloading"}}
+                <form
+                  method="post"
+                  action="/queue/action"
+                  style="display: inline"
+                >
+                  <input type="hidden" name="id" value="{{.ID}}" />
+                  <input type="hidden" name="action" value="pause" />
+                  <button type="submit" class="btn btn-warning">⏸ توقف</button>
+                </form>
+                <form
+                  method="post"
+                  action="/queue/action"
+                  style="display: inline"
+                >
+                  <input type="hidden" name="id" value="{{.ID}}" />
+                  <input type="hidden" name="action" value="cancel" />
+                  <button type="submit" class="btn btn-danger">✕ لغو</button>
+                </form>
+                {{else if or (eq .State "paused") (eq .State "error") (eq .State
+                "canceled")}}
+                <form
+                  method="post"
+                  action="/queue/action"
+                  style="display: inline"
+                >
+                  <input type="hidden" name="id" value="{{.ID}}" />
+                  <input type="hidden" name="action" value="resume" />
+                  <button type="submit" class="btn btn-success">▶ ادامه</button>
+                </form>
+                <form
+                  method="post"
+                  action="/queue/action"
+                  style="display: inline"
+                >
+                  <input type="hidden" name="id" value="{{.ID}}" />
+                  <input type="hidden" name="action" value="cancel" />
+                  <button type="submit" class="btn btn-danger">✕ لغو</button>
+                </form>
+                {{else if eq .State "queued"}}
+                <form
+                  method="post"
+                  action="/queue/action"
+                  style="display: inline"
+                >
+                  <input type="hidden" name="id" value="{{.ID}}" />
+                  <input type="hidden" name="action" value="cancel" />
+                  <button type="submit" class="btn btn-danger">✕ لغو</button>
+                </form>
+                {{else if eq .State "done"}}
+                <a href="/download/{{.ZipName}}" class="btn btn-success"
+                  >⬇ دانلود فایل ZIP</a
+                >
+                {{end}}
+              </div>
+
+              <div class="timestamps">
+                <span>بروزرسانی: {{.UpdatedAt}}</span>
+                <span>ایجاد: {{.CreatedAt}}</span>
+              </div>
+            </div>
+            {{end}}
+          </div>
+          {{else}}
+          <div class="empty">صف خالی است</div>
+          {{end}}
+        </section>
+
+        <!-- Add to Queue -->
+        <section class="panel">
+          <h2 class="panel-title">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 4v16m8-8H4"
+              ></path>
+            </svg>
+            افزودن به صف
+          </h2>
+          <form class="add-form" action="/queue/add" method="post">
+            <div class="form-group">
+              <label class="form-label" for="model">نام مدل</label>
+              <input
+                class="form-input"
+                type="text"
+                id="model"
+                name="model"
+                placeholder="مثال: llama3.2 یا mistral:7b"
+                required
+                autocomplete="off"
+              />
+              <div class="form-hint">
+                نام مدل را وارد کنید، به صورت اختیاری با تگ: model[:tag] یا
+                model@sha256:...
+              </div>
+            </div>
+            <button type="submit" class="btn-add">+ افزودن به صف</button>
+          </form>
+        </section>
+      </div>
     </div>
-</div>
-</body>
+  </body>
 </html>
