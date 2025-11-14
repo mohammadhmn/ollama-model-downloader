@@ -352,14 +352,14 @@
 Print this section and update as you progress:
 
 ```
-PHASE 1: MVP
+PHASE 1: MVP (3-4 days)
 ├─ Backend         [ ] 5/5 tasks
 ├─ CLI             [ ] 2/2 tasks
 ├─ UI              [ ] 5/5 tasks
 ├─ Testing         [ ] 5/5 tasks
 └─ Finalize        [ ] 1/1 task
 
-PHASE 2: Manager
+PHASE 2: Manager (2-3 days)
 ├─ Queue Manager   [ ] 4/4 tasks
 ├─ Speed Tracker   [ ] 2/2 tasks
 ├─ History Manager [ ] 3/3 tasks
@@ -368,17 +368,29 @@ PHASE 2: Manager
 ├─ Testing         [ ] 6/6 tasks
 └─ Finalize        [ ] 1/1 task
 
-PHASE 3: Advanced
+PHASE 3: Advanced (1-2 weeks)
 ├─ Features        [ ] 10/10 tasks
 
-PHASE 4: Polish
+PHASE 4: Polish (2-3 days)
 ├─ Documentation   [ ] 3/3 tasks
 ├─ Code Quality    [ ] 4/4 tasks
+├─ Testing         [ ] 3/3 tasks
 └─ Final           [ ] 2/2 tasks
+
+PHASE 5: Automation (1-2 weeks - optional)
+├─ Scheduling      [ ] 2/2 tasks
+├─ Mirrors         [ ] 2/2 tasks
+├─ Batch Import    [ ] 2/2 tasks
+├─ CLI Improve     [ ] 2/2 tasks
+├─ Webhooks        [ ] 2/2 tasks
+├─ Docker          [ ] 2/2 tasks
+├─ Metrics         [ ] 2/2 tasks
+└─ Docs            [ ] 1/1 task
 ```
 
 ---
 
 **Last Updated**: 2025-11-14
-**Total Tasks**: 68
+**Total Tasks**: 68 core + 17 automation = 85 total
 **Reference**: See docs/ for detailed plans
+**Phase Files**: PHASE1_MVP.md, PHASE2_MANAGER.md, PHASE3_ADVANCED.md, PHASE4_POLISH.md, PHASE5_AUTOMATION.md

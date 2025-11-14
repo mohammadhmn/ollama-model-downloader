@@ -6,16 +6,25 @@ Get started converting Ollama Model Downloader to a full-featured download manag
 
 ## Overview
 
-**Total Effort**: 40-50 hours across 4 phases
+**Total Effort**:
 
-| Phase                 | Duration  | Tasks    | Status         |
-| --------------------- | --------- | -------- | -------------- |
-| **Phase 1: MVP**      | 10-15 hrs | 16 tasks | ⬜ Not Started |
-| **Phase 2: Manager**  | 20-25 hrs | 27 tasks | ⬜ Not Started |
-| **Phase 3: Advanced** | 8-10 hrs  | 10 tasks | ⬜ Not Started |
-| **Phase 4: Polish**   | 3-4 hrs   | 7 tasks  | ⬜ Not Started |
+- **Core** (Phases 1-4): 40-50 hours across 4-5 days
+- **Optional** (Phase 5): 16-23 hours for enterprise features
 
-**Recommended Approach**: Complete Phase 1 MVP in days 1-2, then Phase 2 Manager in days 3-4. Phases 3-4 are optional.
+| Phase                   | Duration  | Tasks    | Status         |
+| ----------------------- | --------- | -------- | -------------- |
+| **Phase 1: MVP**        | 10-15 hrs | 16 tasks | ⬜ Not Started |
+| **Phase 2: Manager**    | 20-25 hrs | 27 tasks | ⬜ Not Started |
+| **Phase 3: Advanced**   | 8-10 hrs  | 10 tasks | ⬜ Not Started |
+| **Phase 4: Polish**     | 15-22 hrs | 7 tasks  | ⬜ Not Started |
+| **Phase 5: Automation** | 16-23 hrs | 8 tasks  | ⬜ Optional    |
+
+**Recommended Approach**:
+
+- Complete Phase 1 MVP in days 1-2 for basic file downloader
+- Add Phase 2 Manager in days 3-4 for multi-download queue
+- Polish with Phase 4 before release
+- Phase 5 (Automation) is optional for enterprise/power users
 
 ---
 
@@ -502,13 +511,15 @@ go build -v
 
 ## Useful References
 
-- See `PHASE1_MVP.md` for detailed Phase 1 tasks
-- See `PHASE2_MANAGER.md` for detailed Phase 2 tasks
-- See `PHASE3_ADVANCED.md` for optional features
-- See `PHASE4_POLISH.md` for final polish
+- See `PHASE1_MVP.md` for detailed Phase 1 tasks (basic downloader)
+- See `PHASE2_MANAGER.md` for detailed Phase 2 tasks (queue & history)
+- See `PHASE3_ADVANCED.md` for optional features (power-user features)
+- See `PHASE4_POLISH.md` for final polish (documentation & testing)
+- See `PHASE5_AUTOMATION.md` for enterprise automation (scheduling, webhooks, Docker)
 - See `CHECKLIST.md` for quick checkboxes
 - See `CONVERSION_PLAN.md` for architecture
 - See `FULL_FEATURED_ROADMAP.md` for complete vision
+- See `PLAN_SUMMARY.md` for quick overview
 
 ---
 

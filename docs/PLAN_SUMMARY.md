@@ -61,6 +61,31 @@ Full-Featured Download Manager
 ✅ Keyboard Shortcuts         - Power user features
 ```
 
+## What Gets Added (Iteration 3: Polish)
+
+```
+✅ Documentation              - README, FEATURES, Contributing guide
+✅ Error Handling             - User-friendly messages with suggestions
+✅ Performance Optimization   - CPU/memory efficiency, large files
+✅ Edge Case Handling         - File conflicts, low disk space
+✅ Security Review            - URL validation, path traversal prevention
+✅ Comprehensive Testing      - Manual checklist and automated tests
+✅ Changelog                  - Document all changes
+```
+
+## What Gets Added (Iteration 4: Automation - Optional)
+
+```
+✅ Download Scheduling        - Cron-based scheduled downloads
+✅ Mirror Fallback            - Automatic fallback to alternate sources
+✅ Batch Import               - Import multiple URLs at once
+✅ CLI Improvements           - Advanced flags, output formats
+✅ Webhook Notifications      - External system integration
+✅ Docker Support             - Container deployment
+✅ Metrics & Monitoring       - Statistics and health API
+✅ Example Scripts            - Real-world usage examples
+```
+
 ## File Changes Summary
 
 ### Backend Files to Modify
@@ -131,8 +156,31 @@ type sessionMeta struct {
 7. History + Statistics
 8. Search, filter, bulk ops
 9. Settings panel
-10. Polish & optimize
+10. Basic optimization
     **Target:** Compete with IDM/FDM
+
+### Polish (Iteration 3) - Release Quality
+
+11. Documentation (README, FEATURES, CONTRIBUTING)
+12. Error messages with suggestions
+13. Performance optimization
+14. Edge case handling
+15. Security hardening
+16. Comprehensive testing
+17. CHANGELOG
+    **Target:** Professional, ready for public release
+
+### Automation (Iteration 4) - Enterprise Optional
+
+18. Download scheduling with cron
+19. Mirror fallback support
+20. Batch import
+21. CLI improvements
+22. Webhook notifications
+23. Docker containerization
+24. Metrics & health API
+25. Example scripts
+    **Target:** Enterprise-grade automation features
 
 ## Key Technical Decisions
 
@@ -189,10 +237,19 @@ type sessionMeta struct {
 - [ ] Settings save properly
 - [ ] Dashboard shows real metrics
 
+## Phase Files
+
+- **Phase 1:** `PHASE1_MVP.md` - Basic file downloader with pause/resume
+- **Phase 2:** `PHASE2_MANAGER.md` - Queue, history, speed tracking
+- **Phase 3:** `PHASE3_ADVANCED.md` - Optional power-user features
+- **Phase 4:** `PHASE4_POLISH.md` - Documentation, testing, optimization
+- **Phase 5:** `PHASE5_AUTOMATION.md` - Scheduling, webhooks, Docker (optional)
+
 ## Quick Links
 
 - **Conversion Plan:** `CONVERSION_PLAN.md`
 - **Full Roadmap:** `FULL_FEATURED_ROADMAP.md`
+- **Checklist:** `CHECKLIST.md`
 - **Current Branch:** `feature/general-purpose-downloader`
 - **Original Branch:** `main`
 
@@ -200,6 +257,7 @@ type sessionMeta struct {
 
 1. Read CONVERSION_PLAN.md for detailed breakdown
 2. Start Phase 1: Backend conversion
-3. Test MVP before moving to advanced features
-4. Get feedback on UI/UX before Phase 2.5
-5. Implement iteratively with git commits at each checkpoint
+3. Test MVP before moving to Phase 2
+4. Get feedback on UI/UX before Phase 2
+5. Complete Phase 4 (Polish) for public release
+6. Phase 5 (Automation) is optional for enterprise users
