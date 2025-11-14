@@ -731,11 +731,11 @@ func openBrowser(url string) {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin":
-		cmd = exec.Command("open", "-a", "Google Chrome", url)
+		cmd = exec.Command("open", url)
 	case "linux":
-		cmd = exec.Command("google-chrome", url)
+		cmd = exec.Command("xdg-open", url)
 	case "windows":
-		cmd = exec.Command("cmd", "/c", "start", "chrome.exe", url)
+		cmd = exec.Command("cmd", "/c", "start", "", url)
 	default:
 		fmt.Println("Unsupported OS for opening browser")
 		return
