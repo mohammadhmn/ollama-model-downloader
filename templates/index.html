@@ -1,636 +1,737 @@
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@200;400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
     <title>مدیریت دانلود مدل‌های Ollama</title>
     <style>
-      @font-face {
-        font-family: "Vazirmatn";
-        src: url("/font/Vazirmatn-Regular.ttf");
-        font-weight: 400;
-        font-style: normal;
-        font-display: swap;
-      }
-      @font-face {
-        font-family: "Vazirmatn";
-        src: url("/font/Vazirmatn-Regular.ttf");
-        font-weight: 700;
-        font-style: normal;
-        font-display: swap;
-      }
-      @font-face {
-        font-family: "Vazirmatn";
-        src: url("/font/Vazirmatn-Regular.ttf");
-        font-weight: 900;
-        font-style: normal;
-        font-display: swap;
-      }
-      :root {
-        --bg-dark: #0f172a;
-        --bg-panel: #1e293b;
-        --bg-card: #0f172a;
-        --text-primary: #e2e8f0;
-        --text-secondary: #94a3b8;
-        --accent: #38bdf8;
-        --accent-hover: #7dd3fc;
-        --success: #10b981;
-        --warning: #f59e0b;
-        --error: #ef4444;
-        --border: rgba(148, 163, 184, 0.2);
-        --font-family: "Vazirmatn", -apple-system, BlinkMacSystemFont,
-          "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      }
-
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-        font-family: var(--font-family);
-      }
-
-      body {
-        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-        color: var(--text-primary);
-        min-height: 100vh;
-        padding: 2rem;
-      }
-
-      .container {
-        max-width: 1400px;
-        margin: 0 auto;
-      }
-
-      header {
-        text-align: center;
-        margin-bottom: 2.5rem;
-      }
-
-      h1 {
-        font-size: 2.5rem;
-        font-weight: 900;
-        margin-bottom: 0.5rem;
-        background: linear-gradient(135deg, var(--accent), var(--accent-hover));
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-      }
-
-      .subtitle {
-        color: var(--text-secondary);
-        font-size: 1rem;
-      }
-
-      .message {
-        background: var(--success);
-        color: var(--bg-dark);
-        padding: 1rem;
-        border-radius: 0.5rem;
-        margin: 1rem auto;
-        max-width: 1400px;
-        font-weight: 700;
-        text-align: center;
-      }
-
-      .grid {
-        display: grid;
-        grid-template-columns: 1fr 1.5fr 1fr;
-        gap: 1.5rem;
-        margin-bottom: 2rem;
-      }
-
-      @media (max-width: 1024px) {
-        .grid {
-          grid-template-columns: 1fr;
+        body {
+            font-family: 'Vazirmatn', 'Segoe UI', sans-serif;
         }
-      }
-
-      .panel {
-        background: var(--bg-panel);
-        border-radius: 1rem;
-        padding: 1.5rem;
-        border: 1px solid var(--border);
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
-      }
-
-      .panel-title {
-        font-size: 1.25rem;
-        font-weight: 700;
-        margin-bottom: 1.5rem;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-      }
-
-      .panel-title svg {
-        width: 20px;
-        height: 20px;
-      }
-
-      /* Downloads List */
-      .download-item {
-        background: var(--bg-card);
-        border: 1px solid var(--border);
-        border-radius: 0.75rem;
-        padding: 1rem;
-        margin-bottom: 0.75rem;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        transition: all 0.2s ease;
-      }
-
-      .download-item:hover {
-        border-color: var(--accent);
-        transform: translateY(-2px);
-      }
-
-      .download-item:last-child {
-        margin-bottom: 0;
-      }
-
-      .model-info {
-        flex: 1;
-      }
-
-      .model-name {
-        font-weight: 700;
-        font-size: 1rem;
-        color: var(--text-primary);
-        margin-bottom: 0.25rem;
-      }
-
-      .model-meta {
-        font-size: 0.875rem;
-        color: var(--text-secondary);
-      }
-
-      .download-link {
-        background: var(--accent);
-        color: var(--bg-dark);
-        padding: 0.5rem 1rem;
-        border-radius: 0.5rem;
-        text-decoration: none;
-        font-weight: 700;
-        font-size: 0.875rem;
-        transition: all 0.2s ease;
-      }
-
-      .download-link:hover {
-        background: var(--accent-hover);
-        transform: scale(1.05);
-      }
-
-      .empty {
-        text-align: center;
-        color: var(--text-secondary);
-        padding: 2rem;
-        font-style: italic;
-      }
-
-      /* Queue */
-      .queue-item {
-        background: var(--bg-card);
-        border: 1px solid var(--border);
-        border-radius: 0.75rem;
-        padding: 1.25rem;
-        margin-bottom: 1rem;
-        transition: all 0.2s ease;
-      }
-
-      .queue-item:last-child {
-        margin-bottom: 0;
-      }
-
-      .queue-item.state-downloading {
-        border-color: var(--accent);
-        box-shadow: 0 0 0 1px var(--accent);
-      }
-
-      .queue-item.state-paused {
-        border-color: var(--warning);
-        opacity: 0.8;
-      }
-
-      .queue-item.state-error {
-        border-color: var(--error);
-      }
-
-      .queue-item.state-done {
-        border-color: var(--success);
-        opacity: 0.9;
-      }
-
-      .queue-item.state-canceled {
-        opacity: 0.6;
-      }
-
-      .queue-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        margin-bottom: 0.75rem;
-      }
-
-      .queue-title {
-        flex: 1;
-      }
-
-      .queue-model {
-        font-weight: 700;
-        font-size: 1.1rem;
-        margin-bottom: 0.25rem;
-      }
-
-      .queue-state {
-        font-size: 0.875rem;
-        color: var(--text-secondary);
-      }
-
-      .queue-id {
-        font-size: 0.75rem;
-        color: var(--text-secondary);
-        font-family: monospace;
-      }
-
-      .progress-section {
-        margin: 1rem 0;
-      }
-
-      .progress-bar {
-        width: 100%;
-        height: 8px;
-        background: rgba(148, 163, 184, 0.2);
-        border-radius: 999px;
-        overflow: hidden;
-        margin-bottom: 0.5rem;
-      }
-
-      .progress-fill {
-        height: 100%;
-        background: linear-gradient(90deg, var(--accent), var(--accent-hover));
-        border-radius: inherit;
-        transition: width 0.3s ease;
-      }
-
-      .progress-text {
-        display: flex;
-        justify-content: space-between;
-        font-size: 0.875rem;
-        color: var(--text-secondary);
-      }
-
-      .queue-message {
-        margin: 0.5rem 0;
-        color: var(--warning);
-        font-size: 0.875rem;
-      }
-
-      .queue-actions {
-        display: flex;
-        gap: 0.5rem;
-        flex-wrap: wrap;
-      }
-
-      .btn {
-        padding: 0.5rem 1rem;
-        border: none;
-        border-radius: 0.5rem;
-        font-weight: 700;
-        font-size: 0.875rem;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        text-decoration: none;
-        display: inline-flex;
-        align-items: center;
-        gap: 0.25rem;
-      }
-
-      .btn:hover {
-        transform: translateY(-1px);
-      }
-
-      .btn-primary {
-        background: var(--accent);
-        color: var(--bg-dark);
-      }
-
-      .btn-primary:hover {
-        background: var(--accent-hover);
-      }
-
-      .btn-warning {
-        background: var(--warning);
-        color: var(--bg-dark);
-      }
-
-      .btn-warning:hover {
-        opacity: 0.9;
-      }
-
-      .btn-danger {
-        background: var(--error);
-        color: white;
-      }
-
-      .btn-danger:hover {
-        opacity: 0.9;
-      }
-
-      .btn-success {
-        background: var(--success);
-        color: var(--bg-dark);
-      }
-
-      .btn-success:hover {
-        opacity: 0.9;
-      }
-
-      .btn-secondary {
-        background: rgba(148, 163, 184, 0.2);
-        color: var(--text-primary);
-      }
-
-      .btn-secondary:hover {
-        background: rgba(148, 163, 184, 0.3);
-      }
-
-      .timestamps {
-        display: flex;
-        justify-content: space-between;
-        font-size: 0.75rem;
-        color: var(--text-secondary);
-        margin-top: 0.75rem;
-        padding-top: 0.75rem;
-        border-top: 1px solid var(--border);
-      }
-
-      /* Add Form */
-      .add-form {
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-      }
-
-      .form-group {
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-      }
-
-      .form-label {
-        font-size: 0.875rem;
-        font-weight: 700;
-        color: var(--text-secondary);
-      }
-
-      .form-input {
-        padding: 0.75rem;
-        border-radius: 0.5rem;
-        border: 1px solid var(--border);
-        background: var(--bg-card);
-        color: var(--text-primary);
-        font-size: 1rem;
-        transition: all 0.2s ease;
-      }
-
-      .form-input:focus {
-        outline: none;
-        border-color: var(--accent);
-        box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.1);
-      }
-
-      .form-hint {
-        font-size: 0.75rem;
-        color: var(--text-secondary);
-        font-style: italic;
-      }
-
-      .btn-add {
-        background: linear-gradient(135deg, var(--accent), var(--accent-hover));
-        color: var(--bg-dark);
-        padding: 0.875rem;
-        border: none;
-        border-radius: 0.5rem;
-        font-size: 1rem;
-        font-weight: 700;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        width: 100%;
-      }
-
-      .btn-add:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(56, 189, 248, 0.3);
-      }
+        .status-indicator {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+        @keyframes slideIn {
+            from {
+                transform: translateY(-10px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        .animate-slide-in {
+            animation: slideIn 0.3s ease-out;
+        }
+        .download-card {
+            transition: all 0.2s ease;
+            border: 1px solid rgba(71, 85, 105, 0.5);
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.8) 100%);
+        }
+        .download-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+            border-color: rgba(56, 189, 248, 0.5);
+        }
+        .tab-button {
+            transition: all 0.2s ease;
+            position: relative;
+        }
+        .tab-button.active {
+            color: rgb(56, 189, 248);
+        }
+        .tab-button.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            left: 0;
+            height: 2px;
+            background: rgb(56, 189, 248);
+        }
+        .progress-bar-animated {
+            background: linear-gradient(90deg,
+                rgba(56, 189, 248, 0.8) 0%,
+                rgba(14, 165, 233, 0.8) 50%,
+                rgba(56, 189, 248, 0.8) 100%);
+            background-size: 200% 100%;
+            animation: shimmer 2s infinite;
+        }
+        @keyframes shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        .model-card {
+            position: relative;
+            overflow: hidden;
+            transition: all 0.2s ease;
+        }
+        .model-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        }
+        .action-btn {
+            transition: all 0.15s ease;
+        }
+        .action-btn:hover {
+            transform: scale(1.05);
+        }
+        .action-btn:active {
+            transform: scale(0.95);
+        }
+        .section-title {
+            position: relative;
+            padding-right: 1rem;
+        }
+        .section-title::before {
+            content: '';
+            position: absolute;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 4px;
+            height: 24px;
+            background: linear-gradient(180deg, rgb(56, 189, 248), rgb(14, 165, 233));
+            border-radius: 2px;
+        }
+        .stat-card {
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.6) 100%);
+            border: 1px solid rgba(71, 85, 105, 0.3);
+            transition: all 0.2s ease;
+        }
+        .stat-card:hover {
+            border-color: rgba(56, 189, 248, 0.4);
+            transform: translateY(-1px);
+        }
+        .toast {
+            animation: slideIn 0.3s ease-out;
+        }
+        .search-input:focus {
+            box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.1);
+        }
     </style>
-  </head>
-  <body>
-    <div class="container">
-      <header>
-        <h1>
-          <svg
-            style="
-              display: inline;
-              width: 2rem;
-              height: 2rem;
-              vertical-align: middle;
-              margin-left: 0.5rem;
-            "
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-            ></path>
-          </svg>
-          Ollama Model Downloader
-        </h1>
-      </header>
-
-      {{if .Message}}
-      <div class="message">{{.Message}}</div>
-      {{end}}
-
-      <div class="grid">
-        <!-- Downloaded Models -->
-        <section class="panel">
-          <h2 class="panel-title">
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-              ></path>
-            </svg>
-            مدل‌های دانلود شده
-          </h2>
-          {{if .Downloads}}
-          <div>
-            {{range .Downloads}}
-            <div class="download-item">
-              <div class="model-info">
-                <div class="model-name">{{.Model}}</div>
-                <div class="model-meta">
-                  {{.Name}} • {{formatTime .ModTime}}
+</head>
+<body class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50">
+    <!-- Header -->
+    <header class="border-b border-slate-800/50 bg-slate-900/90 backdrop-blur-md sticky top-0 z-50">
+        <div class="container mx-auto px-6 py-4">
+            <div class="flex items-center justify-between">
+                <!-- Logo and Title -->
+                <div class="flex items-center gap-4">
+                    <div class="h-10 w-10 rounded-xl bg-gradient-to-br from-sky-400 to-sky-600 flex items-center justify-center shadow-lg">
+                        <svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold text-white">مدیریت دانلود Ollama</h1>
+                        <p class="text-xs text-slate-400">دانلود و مدیریت مدل‌های هوش مصنوعی</p>
+                    </div>
                 </div>
-              </div>
-              <a href="/download/{{.Name}}" class="download-link">دانلود</a>
+
+                <!-- Stats -->
+                <div class="flex items-center gap-3">
+                    <div class="stat-card rounded-lg px-4 py-2">
+                        <div class="flex items-center gap-2">
+                            <div class="h-2 w-2 rounded-full bg-emerald-400"></div>
+                            <span class="text-xs text-slate-400">مدل‌های کامل:</span>
+                            <span class="text-sm font-bold text-emerald-400">{{len .Downloads}}</span>
+                        </div>
+                    </div>
+                    {{if .RunningSession}}
+                    <div class="stat-card rounded-lg px-4 py-2">
+                        <div class="flex items-center gap-2">
+                            <div class="h-2 w-2 rounded-full bg-sky-400 status-indicator"></div>
+                            <span class="text-xs text-slate-400">در حال دانلود:</span>
+                            <span class="text-sm font-bold text-sky-400">1</span>
+                        </div>
+                    </div>
+                    {{end}}
+                    {{if .PausedSessions}}
+                    <div class="stat-card rounded-lg px-4 py-2">
+                        <div class="flex items-center gap-2">
+                            <div class="h-2 w-2 rounded-full bg-amber-400"></div>
+                            <span class="text-xs text-slate-400">در صف:</span>
+                            <span class="text-sm font-bold text-amber-400">{{len .PausedSessions}}</span>
+                        </div>
+                    </div>
+                    {{end}}
+                    {{if .ErroredSessions}}
+                    <div class="stat-card rounded-lg px-4 py-2">
+                        <div class="flex items-center gap-2">
+                            <div class="h-2 w-2 rounded-full bg-rose-400"></div>
+                            <span class="text-xs text-slate-400">خطا:</span>
+                            <span class="text-sm font-bold text-rose-400">{{len .ErroredSessions}}</span>
+                        </div>
+                    </div>
+                    {{end}}
+                </div>
             </div>
-            {{end}}
-          </div>
-          {{else}}
-          <div class="empty">هنوز دانلودی انجام نشده</div>
-          {{end}}
-        </section>
+        </div>
+    </header>
 
-        <!-- Download Queue -->
-        <section class="panel">
-          <h2 class="panel-title">
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-              ></path>
+    <!-- Toast Notification -->
+    {{if .Message}}
+    <div id="toastMessage" class="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 toast">
+        <div class="bg-slate-800 border border-slate-700 rounded-lg shadow-2xl px-6 py-3 flex items-center gap-3 min-w-[300px]">
+            <svg class="h-5 w-5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
             </svg>
-            صف دانلود
-          </h2>
-          {{if .Queue}}
-          <div>
-            {{range .Queue}}
-            <div class="queue-item state-{{.StateClass}}">
-              <div class="queue-header">
-                <div class="queue-id">{{.ID}}</div>
-                <div class="queue-title">
-                  <div class="queue-state">{{.StateLabel}}</div>
-                  <div class="queue-model">{{.Model}}</div>
-                </div>
-              </div>
-
-              {{if gt .Total 0}}
-              <div class="progress-section">
-                <div class="progress-bar">
-                  <div class="progress-fill" style="width: {{.Percent}}%"></div>
-                </div>
-                <div class="progress-text">
-                  <span>{{.Percent}}%</span>
-                  <span>{{humanBytes .Done}} / {{humanBytes .Total}}</span>
-                </div>
-              </div>
-              {{end}} {{if .Message}}
-              <div class="queue-message">{{.Message}}</div>
-              {{end}}
-
-              <div class="queue-actions">
-                {{if eq .State "downloading"}}
-                <form
-                  method="post"
-                  action="/queue/action"
-                  style="display: inline"
-                >
-                  <input type="hidden" name="id" value="{{.ID}}" />
-                  <input type="hidden" name="action" value="pause" />
-                  <button type="submit" class="btn btn-warning">⏸ توقف</button>
-                </form>
-                <form
-                  method="post"
-                  action="/queue/action"
-                  style="display: inline"
-                >
-                  <input type="hidden" name="id" value="{{.ID}}" />
-                  <input type="hidden" name="action" value="cancel" />
-                  <button type="submit" class="btn btn-danger">✕ لغو</button>
-                </form>
-                {{else if or (eq .State "paused") (eq .State "error") (eq .State
-                "canceled")}}
-                <form
-                  method="post"
-                  action="/queue/action"
-                  style="display: inline"
-                >
-                  <input type="hidden" name="id" value="{{.ID}}" />
-                  <input type="hidden" name="action" value="resume" />
-                  <button type="submit" class="btn btn-success">▶ ادامه</button>
-                </form>
-                <form
-                  method="post"
-                  action="/queue/action"
-                  style="display: inline"
-                >
-                  <input type="hidden" name="id" value="{{.ID}}" />
-                  <input type="hidden" name="action" value="cancel" />
-                  <button type="submit" class="btn btn-danger">✕ لغو</button>
-                </form>
-                {{else if eq .State "queued"}}
-                <form
-                  method="post"
-                  action="/queue/action"
-                  style="display: inline"
-                >
-                  <input type="hidden" name="id" value="{{.ID}}" />
-                  <input type="hidden" name="action" value="cancel" />
-                  <button type="submit" class="btn btn-danger">✕ لغو</button>
-                </form>
-                {{else if eq .State "done"}}
-                <a href="/download/{{.ZipName}}" class="btn btn-success"
-                  >⬇ دانلود فایل ZIP</a
-                >
-                {{end}}
-              </div>
-
-              <div class="timestamps">
-                <span>بروزرسانی: {{.UpdatedAt}}</span>
-                <span>ایجاد: {{.CreatedAt}}</span>
-              </div>
-            </div>
-            {{end}}
-          </div>
-          {{else}}
-          <div class="empty">صف خالی است</div>
-          {{end}}
-        </section>
-
-        <!-- Add to Queue -->
-        <section class="panel">
-          <h2 class="panel-title">
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M12 4v16m8-8H4"
-              ></path>
-            </svg>
-            افزودن به صف
-          </h2>
-          <form class="add-form" action="/queue/add" method="post">
-            <div class="form-group">
-              <label class="form-label" for="model">نام مدل</label>
-              <input
-                class="form-input"
-                type="text"
-                id="model"
-                name="model"
-                placeholder="مثال: llama3.2 یا mistral:7b"
-                required
-                autocomplete="off"
-              />
-              <div class="form-hint">
-                نام مدل را وارد کنید، به صورت اختیاری با تگ: model[:tag] یا
-                model@sha256:...
-              </div>
-            </div>
-            <button type="submit" class="btn-add">+ افزودن به صف</button>
-          </form>
-        </section>
-      </div>
+            <p class="text-sm text-slate-200 flex-1">{{.Message}}</p>
+            <button onclick="document.getElementById('toastMessage').remove()" class="text-slate-400 hover:text-slate-200">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
     </div>
-  </body>
+    <script>
+        setTimeout(() => {
+            const toast = document.getElementById('toastMessage');
+            if (toast) {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translate(-50%, -20px)';
+                toast.style.transition = 'all 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }
+        }, 5000);
+    </script>
+    {{end}}
+
+    <!-- Main Container -->
+    <main class="container mx-auto px-6 py-6">
+        <!-- Add New Download Section -->
+        <div class="mb-6 download-card rounded-xl p-6">
+            <h2 class="section-title text-lg font-bold text-white mb-4">دانلود مدل جدید</h2>
+            <form action="/download" method="post" class="space-y-4">
+                <div class="grid grid-cols-1 gap-4">
+                    <!-- Model Name Input -->
+                    <div class="relative">
+                        <input class="search-input w-full rounded-lg border border-slate-700 bg-slate-800/50 px-4 py-3 pr-11 text-sm text-white placeholder-slate-400 focus:border-sky-500 focus:outline-none transition-all"
+                               id="quickModel" name="model" placeholder="نام مدل (مثال: llama3.2, gemma:7b, mistral)" required>
+                        <svg class="absolute right-3 top-3.5 h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                    </div>
+
+                    <!-- Advanced Options -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label for="concurrency" class="block text-xs font-medium text-slate-400 mb-2">تعداد اتصالات همزمان</label>
+                            <input class="w-full rounded-lg border border-slate-700 bg-slate-800/50 px-4 py-2.5 text-sm text-white placeholder-slate-400 focus:border-sky-500 focus:outline-none transition-all"
+                                   id="concurrency" name="concurrency" type="number" min="1" max="16" value="4" title="تعداد اتصالات همزمان برای دانلود سریع‌تر">
+                        </div>
+                        <div>
+                            <label for="retries" class="block text-xs font-medium text-slate-400 mb-2">تعداد تلاش مجدد</label>
+                            <input class="w-full rounded-lg border border-slate-700 bg-slate-800/50 px-4 py-2.5 text-sm text-white placeholder-slate-400 focus:border-sky-500 focus:outline-none transition-all"
+                                   id="retries" name="retries" type="number" min="0" max="10" value="3" title="تعداد دفعات تلاش مجدد در صورت خطا">
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" class="action-btn w-full md:w-auto rounded-lg bg-gradient-to-r from-sky-500 to-sky-600 px-8 py-3 text-base font-semibold text-white transition shadow-lg hover:shadow-sky-500/50 hover:from-sky-400 hover:to-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-slate-900">
+                    <span class="flex items-center justify-center gap-2">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                        افزودن به صف دانلود
+                    </span>
+                </button>
+            </form>
+        </div>
+
+        <!-- Tabs Navigation -->
+        <div class="mb-6 border-b border-slate-800/50">
+            <nav class="flex gap-1">
+                <button onclick="switchTab('active')" class="tab-button active px-6 py-3 text-sm font-medium text-slate-400 hover:text-white transition-colors">
+                    <span class="flex items-center gap-2">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                        دانلودهای فعال
+                        {{if .RunningSession}}
+                        <span class="bg-sky-500/20 text-sky-300 text-xs px-2 py-0.5 rounded-full">1</span>
+                        {{end}}
+                    </span>
+                </button>
+                <button onclick="switchTab('queue')" class="tab-button px-6 py-3 text-sm font-medium text-slate-400 hover:text-white transition-colors">
+                    <span class="flex items-center gap-2">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                        </svg>
+                        صف دانلود
+                        {{if or .PausedSessions .ErroredSessions}}
+                        <span class="bg-amber-500/20 text-amber-300 text-xs px-2 py-0.5 rounded-full">{{add (len .PausedSessions) (len .ErroredSessions)}}</span>
+                        {{end}}
+                    </span>
+                </button>
+                <button onclick="switchTab('library')" class="tab-button px-6 py-3 text-sm font-medium text-slate-400 hover:text-white transition-colors">
+                    <span class="flex items-center gap-2">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z"></path>
+                        </svg>
+                        کتابخانه مدل‌ها
+                        {{if .Downloads}}
+                        <span class="bg-emerald-500/20 text-emerald-300 text-xs px-2 py-0.5 rounded-full">{{len .Downloads}}</span>
+                        {{end}}
+                    </span>
+                </button>
+            </nav>
+        </div>
+
+        <!-- Tab Content: Active Downloads -->
+        <div id="tab-active" class="tab-content">
+            <h2 class="section-title text-xl font-bold text-white mb-6">دانلودهای در حال انجام</h2>
+            {{if .RunningSession}}
+            <div class="space-y-4">
+                <div class="download-card rounded-xl p-6 animate-slide-in">
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-3 mb-2">
+                                <h3 class="text-lg font-bold text-white">{{.RunningSession.Model}}</h3>
+                                <span class="px-3 py-1 rounded-full bg-sky-500/20 text-sky-300 text-xs font-medium flex items-center gap-1.5">
+                                    <div class="h-1.5 w-1.5 rounded-full bg-sky-400 status-indicator"></div>
+                                    {{.RunningSession.StateLabel}}
+                                </span>
+                            </div>
+                            <p class="text-sm text-slate-400">
+                                <span>شروع: {{.RunningSession.Started}}</span>
+                                <span class="mx-2">•</span>
+                                <span>بروزرسانی: {{.RunningSession.Updated}}</span>
+                            </p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="pauseDownload()" class="action-btn rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-300 hover:bg-amber-500/20 focus:outline-none">
+                                <span class="flex items-center gap-1.5">
+                                    <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"></path>
+                                    </svg>
+                                    وقفه
+                                </span>
+                            </button>
+                            <button onclick="cancelDownload()" class="action-btn rounded-lg border border-rose-500/50 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-300 hover:bg-rose-500/20 focus:outline-none">
+                                <span class="flex items-center gap-1.5">
+                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                    </svg>
+                                    لغو
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="progressContainer" class="hidden">
+                        <div class="mb-3 flex items-center justify-between text-sm">
+                            <span id="progressText" class="text-slate-300 font-medium"></span>
+                            <span id="progressPercent" class="text-sky-400 font-bold text-lg"></span>
+                        </div>
+                        <div class="relative w-full h-3 bg-slate-800/50 rounded-full overflow-hidden border border-slate-700/50">
+                            <div id="progressBar" class="progress-bar-animated h-full rounded-full transition-all duration-300 ease-out" style="width:0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {{else}}
+            <div class="download-card rounded-xl p-12 text-center">
+                <div class="mx-auto h-20 w-20 rounded-full bg-slate-800/50 flex items-center justify-center mb-4">
+                    <svg class="h-10 w-10 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-medium text-slate-300 mb-2">هیچ دانلود فعالی وجود ندارد</h3>
+                <p class="text-sm text-slate-500">از بخش بالا یک مدل جدید اضافه کنید</p>
+            </div>
+            {{end}}
+        </div>
+
+        <!-- Tab Content: Download Queue -->
+        <div id="tab-queue" class="tab-content hidden">
+            <h2 class="section-title text-xl font-bold text-white mb-6">صف دانلود</h2>
+            <div class="space-y-4">
+                <!-- Paused Downloads -->
+                {{if .PausedSessions}}
+                {{range .PausedSessions}}
+                <div class="download-card rounded-xl p-5 animate-slide-in">
+                    <div class="flex items-center justify-between">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-3 mb-1">
+                                <h3 class="text-base font-semibold text-white">{{.Model}}</h3>
+                                <span class="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-xs font-medium">متوقف شده</span>
+                            </div>
+                            <p class="text-xs text-slate-400">بروزرسانی: {{.Updated}}</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <form action="/resume" method="post" class="inline">
+                                <input type="hidden" name="session" value="{{.SessionID}}">
+                                <button type="submit" class="action-btn rounded-lg border border-emerald-500/50 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/20">
+                                    <span class="flex items-center gap-1.5">
+                                        <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M8 5v14l11-7z"></path>
+                                        </svg>
+                                        ادامه
+                                    </span>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                {{end}}
+                {{end}}
+
+                <!-- Errored Downloads -->
+                {{if .ErroredSessions}}
+                {{range .ErroredSessions}}
+                <div class="download-card rounded-xl p-5 border-rose-500/30 animate-slide-in">
+                    <div class="flex items-center justify-between">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-3 mb-1">
+                                <h3 class="text-base font-semibold text-white">{{.Model}}</h3>
+                                <span class="px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 text-xs font-medium">خطا</span>
+                            </div>
+                            {{if .Message}}
+                            <p class="text-xs text-rose-300 mb-1">{{.Message}}</p>
+                            {{end}}
+                            <p class="text-xs text-slate-400">بروزرسانی: {{.Updated}}</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <form action="/resume" method="post" class="inline">
+                                <input type="hidden" name="session" value="{{.SessionID}}">
+                                <button type="submit" class="action-btn rounded-lg border border-sky-500/50 bg-sky-500/10 px-4 py-2 text-sm font-semibold text-sky-300 hover:bg-sky-500/20">
+                                    <span class="flex items-center gap-1.5">
+                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                        </svg>
+                                        تلاش مجدد
+                                    </span>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                {{end}}
+                {{end}}
+
+                {{if not (or .PausedSessions .ErroredSessions)}}
+                <div class="download-card rounded-xl p-12 text-center">
+                    <div class="mx-auto h-20 w-20 rounded-full bg-slate-800/50 flex items-center justify-center mb-4">
+                        <svg class="h-10 w-10 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-medium text-slate-300 mb-2">صف دانلود خالی است</h3>
+                    <p class="text-sm text-slate-500">دانلودهای متوقف شده و خطا اینجا نمایش داده می‌شوند</p>
+                </div>
+                {{end}}
+            </div>
+        </div>
+
+        <!-- Tab Content: Library -->
+        <div id="tab-library" class="tab-content hidden">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="section-title text-xl font-bold text-white">کتابخانه مدل‌ها</h2>
+                {{if .Downloads}}
+                <div class="relative">
+                    <input type="text" id="searchInput" onkeyup="filterModels()" placeholder="جستجوی مدل..." class="search-input w-64 rounded-lg border border-slate-700 bg-slate-800/50 px-4 py-2 pr-10 text-sm text-white placeholder-slate-400 focus:border-sky-500 focus:outline-none transition-all">
+                    <svg class="absolute right-3 top-2.5 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                </div>
+                {{end}}
+            </div>
+
+            {{if .Downloads}}
+            <div id="modelsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {{range .Downloads}}
+                <div class="model-card download-card rounded-xl p-5 model-item" data-model-name="{{.Model}}">
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex-1 min-w-0">
+                            <h3 class="text-base font-bold text-white truncate mb-1">{{.Model}}</h3>
+                            <p class="text-xs text-slate-400 truncate">{{.Name}}</p>
+                        </div>
+                        <div class="h-10 w-10 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0 mr-3">
+                            <svg class="h-5 w-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="modelAction('open-folder', '{{.Name}}')" class="action-btn flex-1 rounded-lg border border-sky-500/50 bg-sky-500/10 px-3 py-2 text-xs font-medium text-sky-300 hover:bg-sky-500/20 focus:outline-none">
+                            <span class="flex items-center justify-center gap-1.5">
+                                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z"></path>
+                                </svg>
+                                باز کردن پوشه
+                            </span>
+                        </button>
+                        <button onclick="modelAction('delete', '{{.Name}}')" class="action-btn rounded-lg border border-rose-500/50 bg-rose-500/10 px-3 py-2 text-xs font-medium text-rose-300 hover:bg-rose-500/20 focus:outline-none">
+                            <span class="flex items-center justify-center gap-1.5">
+                                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                </svg>
+                                حذف
+                            </span>
+                        </button>
+                    </div>
+                </div>
+                {{end}}
+            </div>
+            {{else}}
+            <div class="download-card rounded-xl p-12 text-center">
+                <div class="mx-auto h-20 w-20 rounded-full bg-slate-800/50 flex items-center justify-center mb-4">
+                    <svg class="h-10 w-10 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z"></path>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-medium text-slate-300 mb-2">کتابخانه خالی است</h3>
+                <p class="text-sm text-slate-500">مدل‌های دانلود شده اینجا نمایش داده می‌شوند</p>
+            </div>
+            {{end}}
+        </div>
+    </main>
+
+    <script>
+        // Tab Management
+        function switchTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.add('hidden');
+            });
+
+            // Remove active class from all buttons
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            // Show selected tab
+            const selectedTab = document.getElementById('tab-' + tabName);
+            if (selectedTab) {
+                selectedTab.classList.remove('hidden');
+            }
+
+            // Add active class to clicked button
+            event.target.closest('.tab-button').classList.add('active');
+
+            // Save active tab to localStorage
+            localStorage.setItem('activeTab', tabName);
+        }
+
+        // Search/Filter Models
+        function filterModels() {
+            const searchInput = document.getElementById('searchInput');
+            const filter = searchInput.value.toLowerCase();
+            const modelItems = document.querySelectorAll('.model-item');
+
+            modelItems.forEach(item => {
+                const modelName = item.getAttribute('data-model-name').toLowerCase();
+                if (modelName.includes(filter)) {
+                    item.style.display = '';
+                    item.classList.add('animate-slide-in');
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        }
+
+        // Auto-refresh progress and page state
+        let progressInterval;
+        let lastProgressPercent = 0;
+        let downloadCompleted = false;
+
+        function startProgressPolling() {
+            progressInterval = setInterval(() => {
+                fetch('/progress')
+                    .then(response => response.json())
+                    .then(data => {
+                        updateProgress(data);
+
+                        // Check if download completed (was downloading, now finished)
+                        if (data.total > 0 && data.percent === 100 && lastProgressPercent < 100) {
+                            downloadCompleted = true;
+                            // Wait a bit for backend to finalize, then reload
+                            setTimeout(() => {
+                                location.reload();
+                            }, 2000);
+                        }
+
+                        lastProgressPercent = data.percent;
+                    })
+                    .catch(err => console.log('Progress fetch error:', err));
+            }, 1000);
+        }
+
+        function updateProgress(data) {
+            const container = document.getElementById('progressContainer');
+            const bar = document.getElementById('progressBar');
+            const text = document.getElementById('progressText');
+            const percent = document.getElementById('progressPercent');
+
+            if (data.total > 0) {
+                container.style.display = 'block';
+                bar.style.width = data.percent + '%';
+                text.innerText = formatBytes(data.done) + ' / ' + formatBytes(data.total);
+                percent.innerText = data.percent + '%';
+            } else {
+                container.style.display = 'none';
+            }
+        }
+
+        function cancelDownload() {
+            if (!confirm('آیا مطمئن هستید که می‌خواهید این دانلود را لغو کنید؟')) {
+                return;
+            }
+
+            fetch('/cancel', { method: 'POST' })
+                .then(() => {
+                    showNotification('دانلود لغو شد', 'warning');
+                    setTimeout(() => location.reload(), 1000);
+                })
+                .catch(err => {
+                    console.log('Cancel error:', err);
+                    showNotification('خطا در لغو دانلود', 'error');
+                });
+        }
+
+        function pauseDownload() {
+            fetch('/pause', { method: 'POST' })
+                .then(() => {
+                    showNotification('دانلود متوقف شد', 'info');
+                    setTimeout(() => location.reload(), 1000);
+                })
+                .catch(err => {
+                    console.log('Pause error:', err);
+                    showNotification('خطا در توقف دانلود', 'error');
+                });
+        }
+
+        function modelAction(action, name) {
+            const actionMessages = {
+                'unzip': 'در حال استخراج...',
+                'open-folder': 'در حال باز کردن پوشه...',
+                'delete': 'در حال حذف...'
+            };
+
+            // Confirm delete action
+            if (action === 'delete') {
+                if (!confirm(`آیا مطمئن هستید که می‌خواهید "${name}" را حذف کنید؟`)) {
+                    return;
+                }
+            }
+
+            showNotification(actionMessages[action] || 'در حال انجام عمل...', 'info');
+
+            fetch('/model/action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({ action, name })
+            })
+                .then(() => {
+                    showNotification('عملیات با موفقیت انجام شد', 'success');
+                    setTimeout(() => location.reload(), 1000);
+                })
+                .catch(err => {
+                    console.log('Model action error:', err);
+                    showNotification('خطا در انجام عملیات', 'error');
+                });
+        }
+
+        function showNotification(message, type = 'info') {
+            const colors = {
+                'success': 'bg-emerald-500',
+                'error': 'bg-rose-500',
+                'warning': 'bg-amber-500',
+                'info': 'bg-sky-500'
+            };
+
+            const icons = {
+                'success': '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>',
+                'error': '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>',
+                'warning': '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>',
+                'info': '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>'
+            };
+
+            const notification = document.createElement('div');
+            notification.className = `toast fixed top-20 left-1/2 transform -translate-x-1/2 z-50`;
+            notification.innerHTML = `
+                <div class="${colors[type]} text-white px-6 py-3 rounded-lg shadow-2xl flex items-center gap-3 min-w-[300px]">
+                    ${icons[type]}
+                    <span class="flex-1">${message}</span>
+                </div>
+            `;
+
+            document.body.appendChild(notification);
+
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                notification.style.transform = 'translate(-50%, -20px)';
+                notification.style.transition = 'all 0.3s ease';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            // Start progress polling
+            startProgressPolling();
+
+            // Restore last active tab
+            const savedTab = localStorage.getItem('activeTab');
+            if (savedTab) {
+                const tabButton = document.querySelector(`[onclick="switchTab('${savedTab}')"]`);
+                if (tabButton) {
+                    setTimeout(() => {
+                        tabButton.click();
+                    }, 100);
+                }
+            }
+
+            // Add form submission feedback
+            const forms = document.querySelectorAll('form');
+            forms.forEach(form => {
+                form.addEventListener('submit', function(e) {
+                    const submitBtn = form.querySelector('button[type="submit"]');
+                    if (submitBtn) {
+                        const originalHTML = submitBtn.innerHTML;
+                        submitBtn.disabled = true;
+                        submitBtn.innerHTML = `
+                            <span class="flex items-center justify-center gap-2">
+                                <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                در حال ارسال...
+                            </span>
+                        `;
+                    }
+                });
+            });
+
+            // Auto-switch to active tab if there's an active download
+            const hasActiveDownload = document.querySelector('#tab-active .download-card:not(.text-center)');
+            if (hasActiveDownload && !savedTab) {
+                // Already on active tab by default
+            }
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', function() {
+            if (progressInterval) {
+                clearInterval(progressInterval);
+            }
+        });
+    </script>
+</body>
 </html>
