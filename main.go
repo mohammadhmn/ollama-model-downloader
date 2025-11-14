@@ -28,6 +28,9 @@ import (
 //go:embed templates/index.html
 var templateFS embed.FS
 
+//go:embed Vazirmatn/static/Vazirmatn-Regular.ttf
+var fontFS embed.FS
+
 var (
 	currentProgressMu sync.RWMutex
 	currentProgress   *progress
@@ -451,6 +454,21 @@ func (s *server) handleZip(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, path)
 }
 
+func (s *server) handleFont(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	name := strings.TrimPrefix(r.URL.Path, "/font/")
+	if name == "" {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "font/ttf")
+	w.Header().Set("Cache-Control", "public, max-age=31536000")
+	http.FileServer(http.FS(fontFS)).ServeHTTP(w, r)
+}
+
 func redirectWithMessage(w http.ResponseWriter, r *http.Request, message string) {
 	target := "/"
 	if message != "" {
@@ -544,6 +562,7 @@ func main() {
 	mux.HandleFunc("/queue/add", server.handleQueueAdd)
 	mux.HandleFunc("/queue/action", server.handleQueueAction)
 	mux.HandleFunc("/download/", server.handleZip)
+	mux.HandleFunc("/font/", server.handleFont)
 
 	if err := http.Serve(listener, mux); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("server terminated: %v", err)
