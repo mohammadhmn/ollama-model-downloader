@@ -37,6 +37,8 @@ var (
 	currentMessage    string
 	pauseRequested    atomic.Bool
 	currentSessionDir string
+	downloadManager   *DownloadManager
+	historyManager    *HistoryManager
 )
 
 type PageData struct {
@@ -440,6 +442,10 @@ func startWebServer(port int) {
 		return
 	}
 
+	// Initialize download manager and history manager
+	downloadManager = NewDownloadManager(4) // Max 4 concurrent downloads
+	historyManager = NewHistoryManager(downloadsDir)
+
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -639,6 +645,236 @@ func startWebServer(port int) {
 			globalCancel()
 		}
 		http.Redirect(w, r, "/", http.StatusFound)
+	})
+
+	// New API endpoints for download manager
+
+	// Get all downloads
+	http.HandleFunc("/api/downloads", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		downloads := downloadManager.GetAll()
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"downloads": downloads,
+		})
+	})
+
+	// Add new download
+	http.HandleFunc("/api/download/add", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Bad request", http.StatusBadRequest)
+			return
+		}
+
+		url := r.FormValue("url")
+		filename := r.FormValue("filename")
+		retriesStr := r.FormValue("retries")
+
+		if url == "" {
+			http.Error(w, "URL is required", http.StatusBadRequest)
+			return
+		}
+
+		if filename == "" {
+			filename = extractFilenameFromURL(url)
+		}
+
+		retries, _ := strconv.Atoi(retriesStr)
+		if retries < 0 {
+			retries = 3
+		}
+
+		outputPath := filepath.Join(downloadsDir, filename)
+		id, err := downloadManager.AddDownload(url, filename, outputPath, retries)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"id": id})
+	})
+
+	// Pause single download
+	http.HandleFunc("/api/download/", func(w http.ResponseWriter, r *http.Request) {
+		// Parse ID from path
+		parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/download/"), "/")
+		if len(parts) < 2 {
+			http.Error(w, "Invalid path", http.StatusBadRequest)
+			return
+		}
+
+		id := parts[0]
+		action := parts[1]
+
+		var err error
+		switch action {
+		case "pause":
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			err = downloadManager.PauseDownload(id)
+		case "resume":
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			err = downloadManager.ResumeDownload(id)
+		case "cancel":
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			err = downloadManager.RemoveDownload(id)
+		case "delete":
+			if r.Method != http.MethodDelete {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			err = downloadManager.RemoveDownload(id)
+		default:
+			http.Error(w, "Invalid action", http.StatusBadRequest)
+			return
+		}
+
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	})
+
+	// Pause all downloads
+	http.HandleFunc("/api/downloads/pause-all", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		err := downloadManager.PauseAll()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	})
+
+	// Resume all downloads
+	http.HandleFunc("/api/downloads/resume-all", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		err := downloadManager.ResumeAll()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	})
+
+	// Get statistics
+	http.HandleFunc("/api/statistics", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+
+		// Combine statistics from both manager and history
+		dmStats := downloadManager.GetStatistics()
+		histStats := historyManager.GetStatistics()
+
+		// Merge the statistics
+		combined := Statistics{
+			TotalFiles:    dmStats.TotalFiles + histStats.TotalFiles,
+			TotalBytes:    dmStats.TotalBytes + histStats.TotalBytes,
+			TotalTime:     dmStats.TotalTime + histStats.TotalTime,
+			TodayFiles:    dmStats.TodayFiles + histStats.TodayFiles,
+			TodayBytes:    dmStats.TodayBytes + histStats.TodayBytes,
+			TopDomains:    make(map[string]int64),
+			FileTypeStats: make(map[string]int64),
+		}
+
+		// Merge top domains
+		for k, v := range dmStats.TopDomains {
+			combined.TopDomains[k] += v
+		}
+		for k, v := range histStats.TopDomains {
+			combined.TopDomains[k] += v
+		}
+
+		// Merge file type stats
+		for k, v := range dmStats.FileTypeStats {
+			combined.FileTypeStats[k] += v
+		}
+		for k, v := range histStats.FileTypeStats {
+			combined.FileTypeStats[k] += v
+		}
+
+		// Recalculate average speed
+		if combined.TotalTime > 0 {
+			combined.AverageSpeed = combined.TotalBytes / combined.TotalTime
+		}
+
+		json.NewEncoder(w).Encode(combined)
+	})
+
+	// Get history
+	http.HandleFunc("/api/history", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Parse query params
+		limitStr := r.URL.Query().Get("limit")
+		offsetStr := r.URL.Query().Get("offset")
+
+		limit := 50
+		offset := 0
+
+		if limitStr != "" {
+			if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+				limit = l
+			}
+		}
+		if offsetStr != "" {
+			if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
+				offset = o
+			}
+		}
+
+		entries := historyManager.GetEntries()
+		total := len(entries)
+
+		// Apply offset and limit
+		if offset >= total {
+			entries = []*HistoryEntry{}
+		} else {
+			end := offset + limit
+			if end > total {
+				end = total
+			}
+			entries = entries[offset:end]
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"entries": entries,
+			"total":   total,
+		})
 	})
 
 	bindPort := port
