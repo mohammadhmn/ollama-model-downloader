@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@200;400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
-    <title>مدیریت دانلود مدل‌های Ollama</title>
+    <title>مدیریت دانلود فایل‌ها</title>
     <style>
         body {
             font-family: 'Vazirmatn', 'Segoe UI', sans-serif;
@@ -131,8 +131,8 @@
                         </svg>
                     </div>
                     <div>
-                        <h1 class="text-xl font-bold text-white">مدیریت دانلود Ollama</h1>
-                        <p class="text-xs text-slate-400">دانلود و مدیریت مدل‌های هوش مصنوعی</p>
+                        <h1 class="text-xl font-bold text-white">مدیریت دانلود فایل‌ها</h1>
+                        <p class="text-xs text-slate-400">دانلود فایل‌های HTTP/HTTPS با قابلیت وقفه و ادامه</p>
                     </div>
                 </div>
 
@@ -141,7 +141,7 @@
                     <div class="stat-card rounded-lg px-4 py-2">
                         <div class="flex items-center gap-2">
                             <div class="h-2 w-2 rounded-full bg-emerald-400"></div>
-                            <span class="text-xs text-slate-400">مدل‌های کامل:</span>
+                            <span class="text-xs text-slate-400">فایل‌های دانلود شده:</span>
                             <span class="text-sm font-bold text-emerald-400">{{len .Downloads}}</span>
                         </div>
                     </div>
@@ -209,24 +209,24 @@
     <main class="container mx-auto px-6 py-6">
         <!-- Add New Download Section -->
         <div class="mb-6 download-card rounded-xl p-6">
-            <h2 class="section-title text-lg font-bold text-white mb-4">دانلود مدل جدید</h2>
+            <h2 class="section-title text-lg font-bold text-white mb-4">دانلود فایل جدید</h2>
             <form action="/download" method="post" class="space-y-4">
                 <div class="grid grid-cols-1 gap-4">
-                    <!-- Model Name Input -->
+                    <!-- URL Input -->
                     <div class="relative">
                         <input class="search-input w-full rounded-lg border border-slate-700 bg-slate-800/50 px-4 py-3 pr-11 text-sm text-white placeholder-slate-400 focus:border-sky-500 focus:outline-none transition-all"
-                               id="quickModel" name="model" placeholder="نام مدل (مثال: llama3.2, gemma:7b, mistral)" required>
+                               id="downloadUrl" name="model" placeholder="آدرس دانلود (مثال: https://example.com/file.zip)" required>
                         <svg class="absolute right-3 top-3.5 h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.658 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
                         </svg>
                     </div>
 
-                    <!-- Advanced Options -->
+                    <!-- Output Filename and Retries Options -->
                     <div class="grid grid-cols-2 gap-4">
                         <div>
-                            <label for="concurrency" class="block text-xs font-medium text-slate-400 mb-2">تعداد اتصالات همزمان</label>
+                            <label for="outputName" class="block text-xs font-medium text-slate-400 mb-2">نام فایل خروجی (اختیاری)</label>
                             <input class="w-full rounded-lg border border-slate-700 bg-slate-800/50 px-4 py-2.5 text-sm text-white placeholder-slate-400 focus:border-sky-500 focus:outline-none transition-all"
-                                   id="concurrency" name="concurrency" type="number" min="1" max="16" value="4" title="تعداد اتصالات همزمان برای دانلود سریع‌تر">
+                                   id="outputName" name="outputName" type="text" placeholder="نام فایل (خودکار اگر خالی باشد)" title="اگر خالی باشد، نام از URL استخراج می‌شود">
                         </div>
                         <div>
                             <label for="retries" class="block text-xs font-medium text-slate-400 mb-2">تعداد تلاش مجدد</label>
@@ -241,7 +241,7 @@
                         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                         </svg>
-                        افزودن به صف دانلود
+                        شروع دانلود
                     </span>
                 </button>
             </form>
@@ -277,7 +277,7 @@
                         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z"></path>
                         </svg>
-                        کتابخانه مدل‌ها
+                        فایل‌های دانلود شده
                         {{if .Downloads}}
                         <span class="bg-emerald-500/20 text-emerald-300 text-xs px-2 py-0.5 rounded-full">{{len .Downloads}}</span>
                         {{end}}
@@ -488,8 +488,8 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z"></path>
                     </svg>
                 </div>
-                <h3 class="text-lg font-medium text-slate-300 mb-2">کتابخانه خالی است</h3>
-                <p class="text-sm text-slate-500">مدل‌های دانلود شده اینجا نمایش داده می‌شوند</p>
+                <h3 class="text-lg font-medium text-slate-300 mb-2">هنوز فایلی دانلود نشده است</h3>
+                <p class="text-sm text-slate-500">فایل‌های دانلود شده اینجا نمایش داده می‌شوند</p>
             </div>
             {{end}}
         </div>
@@ -682,9 +682,270 @@
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
 
+        // New Download Manager API Functions
+        let downloadsInterval;
+
+        async function fetchDownloads() {
+            try {
+                const response = await fetch('/api/downloads');
+                const data = await response.json();
+                updateDownloadTabs(data.downloads || []);
+            } catch (err) {
+                console.log('Error fetching downloads:', err);
+            }
+        }
+
+        function updateDownloadTabs(downloads) {
+            // Separate downloads by status
+            const active = downloads.filter(d => d.status === 'active');
+            const queued = downloads.filter(d => d.status === 'queued');
+            const completed = downloads.filter(d => d.status === 'completed');
+
+            // Update tab badges
+            updateTabBadges(active.length, queued.length, completed.length);
+
+            // Render each tab
+            renderActiveDownloads(active);
+            renderQueuedDownloads(queued);
+            renderCompletedDownloads(completed);
+        }
+
+        function updateTabBadges(activeCount, queueCount, completedCount) {
+            const activeBadge = document.querySelector('[onclick="switchTab(\'active\')"] .badge');
+            const queueBadge = document.querySelector('[onclick="switchTab(\'queue\')"] .badge');
+            const libraryBadge = document.querySelector('[onclick="switchTab(\'library\')"] .badge');
+
+            if (activeBadge) activeBadge.textContent = activeCount;
+            if (queueBadge) queueBadge.textContent = queueCount;
+            if (libraryBadge) libraryBadge.textContent = completedCount;
+        }
+
+        function renderActiveDownloads(downloads) {
+            const container = document.querySelector('#tab-active .grid');
+            if (!container) return;
+
+            if (downloads.length === 0) {
+                container.innerHTML = '<div class="col-span-full text-center text-slate-400 py-12">هیچ دانلود فعالی وجود ندارد</div>';
+                return;
+            }
+
+            container.innerHTML = downloads.map(dl => `
+                <div class="download-card rounded-xl p-6 animate-slide-in">
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex-1">
+                            <h3 class="text-white font-semibold text-lg mb-1">${escapeHtml(dl.filename)}</h3>
+                            <p class="text-slate-400 text-sm truncate">${escapeHtml(dl.url)}</p>
+                        </div>
+                        <div class="flex items-center gap-2 text-sm">
+                            <span class="text-emerald-400 font-medium">↓ ${formatSpeed(dl.speed)}</span>
+                            <span class="text-slate-400">|</span>
+                            <span class="text-sky-400">${formatETA(dl.eta)}</span>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <div class="flex justify-between text-sm mb-2">
+                            <span class="text-slate-400">${formatBytes(dl.progress)} / ${formatBytes(dl.total)}</span>
+                            <span class="text-white font-medium">${calculatePercent(dl.progress, dl.total)}%</span>
+                        </div>
+                        <div class="w-full bg-slate-700 rounded-full h-2.5 overflow-hidden">
+                            <div class="progress-bar-animated h-full rounded-full transition-all duration-300"
+                                 style="width: ${calculatePercent(dl.progress, dl.total)}%"></div>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-2">
+                        <button onclick="pauseDownloadAPI('${dl.id}')"
+                                class="action-btn flex-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 px-4 py-2 rounded-lg text-sm font-medium">
+                            مکث
+                        </button>
+                        <button onclick="cancelDownloadAPI('${dl.id}')"
+                                class="action-btn flex-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 px-4 py-2 rounded-lg text-sm font-medium">
+                            لغو
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderQueuedDownloads(downloads) {
+            const container = document.querySelector('#tab-queue .grid');
+            if (!container) return;
+
+            if (downloads.length === 0) {
+                container.innerHTML = '<div class="col-span-full text-center text-slate-400 py-12">صف دانلود خالی است</div>';
+                return;
+            }
+
+            container.innerHTML = downloads.map(dl => `
+                <div class="download-card rounded-xl p-6">
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex-1">
+                            <h3 class="text-white font-semibold text-lg mb-1">${escapeHtml(dl.filename)}</h3>
+                            <p class="text-slate-400 text-sm truncate">${escapeHtml(dl.url)}</p>
+                        </div>
+                        <span class="px-3 py-1 bg-amber-500/20 text-amber-400 rounded-full text-xs font-medium">
+                            در صف
+                        </span>
+                    </div>
+
+                    <div class="flex gap-2">
+                        <button onclick="resumeDownloadAPI('${dl.id}')"
+                                class="action-btn flex-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 px-4 py-2 rounded-lg text-sm font-medium">
+                            شروع
+                        </button>
+                        <button onclick="cancelDownloadAPI('${dl.id}')"
+                                class="action-btn flex-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 px-4 py-2 rounded-lg text-sm font-medium">
+                            حذف
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderCompletedDownloads(downloads) {
+            const container = document.querySelector('#tab-library .grid');
+            if (!container) return;
+
+            if (downloads.length === 0) {
+                container.innerHTML = '<div class="col-span-full text-center text-slate-400 py-12">هیچ فایل دانلود شده‌ای وجود ندارد</div>';
+                return;
+            }
+
+            container.innerHTML = downloads.map(dl => `
+                <div class="download-card rounded-xl p-6">
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex-1">
+                            <h3 class="text-white font-semibold text-lg mb-1">${escapeHtml(dl.filename)}</h3>
+                            <p class="text-slate-400 text-sm">${formatBytes(dl.total)}</p>
+                        </div>
+                        <span class="px-3 py-1 bg-emerald-500/20 text-emerald-400 rounded-full text-xs font-medium">
+                            ✓ تکمیل شده
+                        </span>
+                    </div>
+
+                    <div class="flex gap-2">
+                        <button onclick="openFolder('${escapeHtml(dl.outputPath)}')"
+                                class="action-btn flex-1 bg-sky-500/20 hover:bg-sky-500/30 text-sky-400 px-4 py-2 rounded-lg text-sm font-medium">
+                            📁 پوشه
+                        </button>
+                        <button onclick="deleteDownloadAPI('${dl.id}')"
+                                class="action-btn bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 px-4 py-2 rounded-lg text-sm font-medium">
+                            🗑️
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Download action functions
+        async function pauseDownloadAPI(id) {
+            try {
+                const response = await fetch(`/api/download/${id}/pause`, { method: 'POST' });
+                if (response.ok) {
+                    showNotification('دانلود متوقف شد', 'info');
+                    fetchDownloads();
+                }
+            } catch (err) {
+                console.log('Error pausing download:', err);
+                showNotification('خطا در توقف دانلود', 'error');
+            }
+        }
+
+        async function resumeDownloadAPI(id) {
+            try {
+                const response = await fetch(`/api/download/${id}/resume`, { method: 'POST' });
+                if (response.ok) {
+                    showNotification('دانلود از سر گرفته شد', 'success');
+                    fetchDownloads();
+                }
+            } catch (err) {
+                console.log('Error resuming download:', err);
+                showNotification('خطا در ادامه دانلود', 'error');
+            }
+        }
+
+        async function cancelDownloadAPI(id) {
+            if (!confirm('آیا مطمئن هستید که می‌خواهید این دانلود را لغو کنید؟')) {
+                return;
+            }
+            try {
+                const response = await fetch(`/api/download/${id}/cancel`, { method: 'POST' });
+                if (response.ok) {
+                    showNotification('دانلود لغو شد', 'warning');
+                    fetchDownloads();
+                }
+            } catch (err) {
+                console.log('Error canceling download:', err);
+                showNotification('خطا در لغو دانلود', 'error');
+            }
+        }
+
+        async function deleteDownloadAPI(id) {
+            if (!confirm('آیا مطمئن هستید که می‌خواهید این فایل را حذف کنید؟')) {
+                return;
+            }
+            try {
+                const response = await fetch(`/api/download/${id}`, { method: 'DELETE' });
+                if (response.ok) {
+                    showNotification('فایل حذف شد', 'success');
+                    fetchDownloads();
+                }
+            } catch (err) {
+                console.log('Error deleting download:', err);
+                showNotification('خطا در حذف فایل', 'error');
+            }
+        }
+
+        function openFolder(path) {
+            modelAction('open-folder', path);
+        }
+
+        // Helper functions
+        function calculatePercent(progress, total) {
+            if (total === 0) return 0;
+            return Math.round((progress / total) * 100);
+        }
+
+        function formatSpeed(bytesPerSec) {
+            if (bytesPerSec === 0) return '-- KB/s';
+            if (bytesPerSec < 1024) return bytesPerSec + ' B/s';
+            if (bytesPerSec < 1024 * 1024) return (bytesPerSec / 1024).toFixed(1) + ' KB/s';
+            if (bytesPerSec < 1024 * 1024 * 1024) return (bytesPerSec / (1024 * 1024)).toFixed(1) + ' MB/s';
+            return (bytesPerSec / (1024 * 1024 * 1024)).toFixed(2) + ' GB/s';
+        }
+
+        function formatETA(seconds) {
+            if (seconds === 0 || !seconds) return 'در حال محاسبه...';
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = Math.floor(seconds % 60);
+
+            if (hours > 0) return `${hours}h ${minutes}m`;
+            if (minutes > 0) return `${minutes}m ${secs}s`;
+            return `${secs}s`;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function startDownloadsPolling() {
+            // Initial fetch
+            fetchDownloads();
+
+            // Poll every second
+            downloadsInterval = setInterval(fetchDownloads, 1000);
+        }
+
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
-            // Start progress polling
+            // Start downloads polling
+            startDownloadsPolling();
+
+            // Start progress polling (keep for backward compatibility)
             startProgressPolling();
 
             // Restore last active tab
@@ -730,6 +991,9 @@
         window.addEventListener('beforeunload', function() {
             if (progressInterval) {
                 clearInterval(progressInterval);
+            }
+            if (downloadsInterval) {
+                clearInterval(downloadsInterval);
             }
         });
     </script>
